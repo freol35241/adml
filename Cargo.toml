@@ -19,10 +19,9 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/freol35241/odml"
 
 [workspace.dependencies]
-# FMI export dependencies - using rust-fmi from git
-# Note: fmi-export is not published separately, so we use git dependencies
-fmi = { git = "https://github.com/jondo2010/rust-fmi.git", features = ["fmi3"] }
-fmi-export = { git = "https://github.com/jondo2010/rust-fmi.git", features = ["fmi3"] }
+# FMI export dependencies - using fmu_from_struct temporarily
+# Will migrate to fmi-export once it's published to crates.io
+fmu_from_struct = "0.2"
 
 # Testing dependencies
 approx = "0.5"

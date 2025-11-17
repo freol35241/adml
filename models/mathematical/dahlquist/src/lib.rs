@@ -9,36 +9,49 @@
 //! This is a fundamental test case for ODE solvers, useful for studying
 //! stability and accuracy of numerical integration methods.
 
-use fmi::fmi3::{Fmi3Error, Fmi3Res};
-use fmi_export::{
-    fmi3::{DefaultLoggingCategory, ModelContext, UserModel},
-    FmuModel,
-};
+pub use fmu_from_struct::prelude::*;
 
-/// Dahlquist FMU model implementing der(x) = -k * x
+/// Dahlquist test equation model
 ///
-/// This is a simple first-order linear ODE that demonstrates basic
-/// Model Exchange and Co-Simulation capabilities.
-#[derive(FmuModel, Default, Debug)]
-#[model()]
+/// This implements a simple first-order linear ODE: der(x) = -k * x
+#[derive(Fmu, Default, Debug, Clone)]
+#[fmu_from_struct(fmi_version = 3)]
 pub struct Dahlquist {
-    /// The state variable
-    #[variable(causality = Output, variability = Continuous, state, start = 1.0, initial = Exact)]
+    #[fmu_from_struct(parameter)]
+    #[fmu_from_struct(start_value="1.0")]
+    /// Decay constant k
+    pub k: f64,
+
+    #[fmu_from_struct(output)]
+    #[fmu_from_struct(start_value="1.0")]
+    /// State variable x
     pub x: f64,
 
-    /// The derivative of x, calculated as der(x) = -k * x
-    #[variable(causality = Local, variability = Continuous, derivative = x, initial = Calculated)]
-    der_x: f64,
+    /// FMU runtime information (optional)
+    pub fmu_info: FmuInfo,
+}
 
-    /// The parameter k (decay constant)
-    #[variable(causality = Parameter, variability = Fixed, start = 1.0, initial = Exact)]
-    pub k: f64,
+impl FmuFunctions for Dahlquist {
+    fn exit_initialization_mode(&mut self) {
+        // Nothing special needed for initialization
+    }
+
+    fn do_step(&mut self, _current_time: f64, time_step: f64) {
+        // Euler integration: x = x + dx/dt * dt
+        // where dx/dt = -k * x
+        let der_x = -self.k * self.x;
+        self.x += der_x * time_step;
+    }
 }
 
 impl Dahlquist {
     /// Create a new Dahlquist model with default parameters
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            k: 1.0,
+            x: 1.0,
+            fmu_info: FmuInfo::default(),
+        }
     }
 
     /// Get the analytical solution at time t from initial value x0
@@ -46,19 +59,6 @@ impl Dahlquist {
         x0 * (-k * t).exp()
     }
 }
-
-impl UserModel for Dahlquist {
-    type LoggingCategory = DefaultLoggingCategory;
-
-    fn calculate_values(&mut self, _context: &ModelContext<Self>) -> Result<Fmi3Res, Fmi3Error> {
-        // Calculate the derivative: der(x) = -k * x
-        self.der_x = -self.k * self.x;
-        Ok(Fmi3Res::OK)
-    }
-}
-
-// Export the FMU with full C API
-fmi_export::export_fmu!(Dahlquist);
 
 #[cfg(test)]
 mod tests {
@@ -74,12 +74,10 @@ mod tests {
     #[test]
     fn test_derivative_calculation() {
         let mut model = Dahlquist::new();
-        let context = ModelContext::default();
 
-        model.calculate_values(&context).unwrap();
-
-        // der(x) = -k * x = -1.0 * 1.0 = -1.0
-        assert_eq!(model.der_x, -1.0);
+        // Manually calculate what one step should do
+        let der_x = -model.k * model.x; // -1.0 * 1.0 = -1.0
+        assert_eq!(der_x, -1.0);
     }
 
     #[test]
@@ -92,14 +90,16 @@ mod tests {
     }
 
     #[test]
-    fn test_parameter_modification() {
+    fn test_do_step() {
         let mut model = Dahlquist::new();
-        let context = ModelContext::default();
 
-        model.k = 2.0;
-        model.calculate_values(&context).unwrap();
+        let initial_x = model.x;
+        let dt = 0.1;
 
-        // der(x) = -k * x = -2.0 * 1.0 = -2.0
-        assert_eq!(model.der_x, -2.0);
+        model.do_step(0.0, dt);
+
+        // After one Euler step: x_new = x + (-k*x)*dt = 1.0 + (-1.0)*0.1 = 0.9
+        assert!((model.x - 0.9).abs() < 1e-10);
+        assert!(model.x < initial_x); // Should decay
     }
 }

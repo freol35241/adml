@@ -10,53 +10,99 @@
 //! - Reverse velocity with coefficient of restitution: v = -e * v
 //! - Stop bouncing when |v| < v_min
 
-use fmi::{
-    EventFlags,
-    fmi3::{Fmi3Error, Fmi3Res},
-};
-use fmi_export::{
-    FmuModel,
-    fmi3::{DefaultLoggingCategory, ModelContext, UserModel},
-};
+pub use fmu_from_struct::prelude::*;
 
-/// BouncingBall FMU model that can be exported as a complete FMU
-#[derive(FmuModel, Default, Debug)]
-#[model()]
+/// Bouncing Ball FMU model
+///
+/// Simulates a ball bouncing under gravity with energy dissipation on impact.
+/// The ball stops bouncing when the velocity becomes too small.
+#[derive(Fmu, Default, Debug, Clone)]
+#[fmu_from_struct(fmi_version = 3)]
 pub struct BouncingBall {
-    /// Height above ground (m)
-    #[variable(causality = Output, state, event_indicator, start = 1.0, initial = Exact)]
-    pub h: f64,
-
-    /// Vertical velocity (m/s)
-    /// Also serves as der(h)
-    #[variable(causality = Output, state, start = 0.0, initial = Exact)]
-    #[alias(name="der(h)", causality = Local, derivative = h, initial = Calculated)]
-    pub v: f64,
-
+    #[fmu_from_struct(parameter)]
+    #[fmu_from_struct(start_value="-9.81")]
     /// Gravitational acceleration (m/s²), typically negative
-    /// Also serves as der(v)
-    #[variable(causality = Parameter, start = -9.81, initial = Exact)]
-    #[alias(name = "der(v)", causality = Local, derivative = v, initial = Calculated)]
     pub g: f64,
 
+    #[fmu_from_struct(parameter)]
+    #[fmu_from_struct(start_value="0.7")]
     /// Coefficient of restitution (0 < e < 1)
-    #[variable(causality = Parameter, start = 0.7, initial = Exact)]
     pub e: f64,
 
-    /// Minimum velocity threshold
-    #[variable(causality = Local, start = 0.1, initial = Exact)]
+    #[fmu_from_struct(output)]
+    #[fmu_from_struct(start_value="1.0")]
+    /// Height above ground (m)
+    pub h: f64,
+
+    #[fmu_from_struct(output)]
+    #[fmu_from_struct(start_value="0.0")]
+    /// Vertical velocity (m/s)
+    pub v: f64,
+
+    /// Minimum velocity threshold below which the ball stops
     v_min: f64,
+
+    /// FMU runtime information (optional)
+    pub fmu_info: FmuInfo,
+}
+
+impl FmuFunctions for BouncingBall {
+    fn exit_initialization_mode(&mut self) {
+        // Set the minimum velocity threshold
+        self.v_min = 0.1;
+    }
+
+    fn do_step(&mut self, _current_time: f64, time_step: f64) {
+        // Check for collision at start of step (before integration)
+        if self.h <= 0.0 && self.v < 0.0 {
+            // Ball has hit the ground
+            self.h = f64::MIN_POSITIVE; // Place slightly above ground
+            self.v = -self.v * self.e;   // Reverse velocity with energy loss
+
+            // Stop bouncing if velocity becomes too small
+            if self.v < self.v_min {
+                self.v = 0.0;
+                self.h = 0.0;
+                self.g = 0.0; // Disable gravity when stopped
+            }
+
+            // Don't integrate in the same step as a bounce (bounce is instantaneous)
+            return;
+        }
+
+        // Calculate derivatives:
+        // der(h) = v
+        // der(v) = g
+        let der_h = self.v;
+        let der_v = self.g;
+
+        // Euler integration
+        self.h += der_h * time_step;
+        self.v += der_v * time_step;
+
+        // Check for collision after integration (ball crossed ground during step)
+        if self.h < 0.0 {
+            self.h = 0.0; // Snap to ground level
+        }
+    }
 }
 
 impl BouncingBall {
     /// Create a new bouncing ball with default parameters
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            g: -9.81,
+            e: 0.7,
+            h: 1.0,
+            v: 0.0,
+            v_min: 0.1,
+            fmu_info: FmuInfo::default(),
+        }
     }
 
-    /// Calculate kinetic energy
+    /// Calculate kinetic energy (assuming unit mass)
     pub fn kinetic_energy(&self) -> f64 {
-        0.5 * self.v * self.v // Assuming unit mass
+        0.5 * self.v * self.v
     }
 
     /// Calculate potential energy (assuming unit mass)
@@ -69,69 +115,6 @@ impl BouncingBall {
         self.kinetic_energy() + self.potential_energy()
     }
 }
-
-impl UserModel for BouncingBall {
-    type LoggingCategory = DefaultLoggingCategory;
-
-    fn calculate_values(&mut self, _context: &ModelContext<Self>) -> Result<Fmi3Res, Fmi3Error> {
-        // Derivatives are handled by the FMI framework via aliases
-        // der(h) = v and der(v) = g are specified in the variable attributes
-        Ok(Fmi3Res::OK)
-    }
-
-    fn event_update(
-        &mut self,
-        context: &ModelContext<Self>,
-        event_flags: &mut EventFlags,
-    ) -> Result<Fmi3Res, Fmi3Error> {
-        // Handle ball bouncing off the ground
-        if self.h <= 0.0 && self.v < 0.0 {
-            context.log(
-                Fmi3Res::OK,
-                Self::LoggingCategory::default(),
-                format_args!("Ball bounced! h={:.3}, v={:.3}", self.h, self.v),
-            );
-
-            self.h = f64::MIN_POSITIVE; // Slightly above ground
-            self.v = -self.v * self.e; // Reverse velocity with energy loss
-
-            // Stop bouncing if velocity becomes too small
-            if self.v < self.v_min {
-                context.log(
-                    Fmi3Res::OK,
-                    Self::LoggingCategory::default(),
-                    format_args!("Ball stopped bouncing"),
-                );
-                self.v = 0.0;
-                self.g = 0.0; // Disable gravity when stopped
-            }
-
-            event_flags.values_of_continuous_states_changed = true;
-        } else {
-            event_flags.values_of_continuous_states_changed = false;
-        }
-
-        Ok(Fmi3Res::OK)
-    }
-
-    fn get_event_indicators(
-        &mut self,
-        _context: &ModelContext<Self>,
-        indicators: &mut [f64],
-    ) -> Result<bool, Fmi3Error> {
-        assert!(!indicators.is_empty());
-        // Event indicator for ground contact
-        indicators[0] = if self.h == 0.0 && self.v == 0.0 {
-            1.0 // Special case: stopped ball
-        } else {
-            self.h // Height as event indicator
-        };
-        Ok(true)
-    }
-}
-
-// Export the FMU with full C API
-fmi_export::export_fmu!(BouncingBall);
 
 #[cfg(test)]
 mod tests {
@@ -157,38 +140,90 @@ mod tests {
 
         assert!((pe - 9.81).abs() < 1e-10);
         assert!((ke - 0.0).abs() < 1e-10);
+
+        // Test with velocity
+        model.v = 2.0;
+        let ke2 = model.kinetic_energy();
+        assert!((ke2 - 2.0).abs() < 1e-10); // 0.5 * 2² = 2.0
     }
 
     #[test]
-    fn test_event_detection() {
-        use fmi::EventFlags;
-
+    fn test_do_step_no_collision() {
         let mut model = BouncingBall::new();
-        let context = ModelContext::default();
-        let mut event_flags = EventFlags::default();
-
-        // No collision when above ground
         model.h = 1.0;
-        model.v = -1.0;
-        model.event_update(&context, &mut event_flags).unwrap();
-        assert!(!event_flags.values_of_continuous_states_changed);
+        model.v = 0.0;
 
-        // Collision when at ground and moving down
+        let dt = 0.1;
+        model.do_step(0.0, dt);
+
+        // After one step: h = h + v*dt, v = v + g*dt
+        // h_new = 1.0 + 0.0*0.1 = 1.0
+        // v_new = 0.0 + (-9.81)*0.1 = -0.981
+        assert!((model.h - 1.0).abs() < 1e-10);
+        assert!((model.v - (-0.981)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_collision_handling() {
+        let mut model = BouncingBall::new();
         model.h = 0.0;
-        model.v = -1.0;
-        model.event_update(&context, &mut event_flags).unwrap();
-        assert!(event_flags.values_of_continuous_states_changed);
-        assert!(model.v > 0.0); // Velocity should be reversed
+        model.v = -2.0;
+        let initial_v_abs = model.v.abs();
+
+        model.do_step(0.0, 0.01);
+
+        // After collision, velocity should be reversed and reduced
+        let expected_v = initial_v_abs * model.e;
+        assert!((model.v - expected_v).abs() < 1e-10);
+        assert!(model.h > 0.0); // Should be slightly above ground
     }
 
     #[test]
-    fn test_event_indicators() {
+    fn test_stopping_condition() {
         let mut model = BouncingBall::new();
-        let context = ModelContext::default();
-        let mut indicators = vec![0.0];
+        model.h = 0.0;
+        model.v = -0.05; // Below v_min = 0.1
 
+        model.do_step(0.0, 0.01);
+
+        // Ball should have stopped
+        assert_eq!(model.v, 0.0);
+        assert_eq!(model.h, 0.0);
+        assert_eq!(model.g, 0.0); // Gravity disabled
+    }
+
+    #[test]
+    fn test_energy_loss_on_bounce() {
+        let mut model = BouncingBall::new();
         model.h = 1.0;
-        model.get_event_indicators(&context, &mut indicators).unwrap();
-        assert_eq!(indicators[0], 1.0);
+        model.v = 0.0;
+        let initial_energy = model.total_energy();
+
+        // Simulate fall and bounce
+        model.h = 0.0;
+        model.v = -4.43; // Approximate velocity after falling from h=1.0
+
+        let energy_before_bounce = model.total_energy();
+        model.do_step(0.0, 0.01);
+        let energy_after_bounce = model.total_energy();
+
+        // Energy should decrease after bounce (but not necessarily from initial,
+        // since we artificially set the velocity)
+        assert!(energy_after_bounce < energy_before_bounce);
+    }
+
+    #[test]
+    fn test_no_collision_above_ground() {
+        let mut model = BouncingBall::new();
+        model.h = 0.5;
+        model.v = -1.0;
+        let initial_v = model.v;
+
+        model.do_step(0.0, 0.01);
+
+        // Ball should continue falling (no collision yet)
+        // v should become more negative due to gravity
+        assert!(model.v < initial_v);
+        assert!(model.h < 0.5);
     }
 }

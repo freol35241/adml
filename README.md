@@ -21,6 +21,8 @@ All models are:
 - ✅ **Well documented** - Each model includes detailed documentation
 - ✅ **Cross-platform** - Built for Linux, Windows, and ARM architectures
 
+**Note:** Models currently use the [`fmu_from_struct`](https://github.com/jarlekramer/fmu_from_struct) crate for FMI export. See [FMI_EXPORT_STATUS.md](FMI_EXPORT_STATUS.md) for details and future migration plans to the official `fmi-export` crate.
+
 ## 📦 Available Models
 
 ### Mathematical Models
@@ -180,7 +182,7 @@ Each model has independent versioning!
    crate-type = ["cdylib", "rlib"]
 
    [dependencies]
-   fmi = { workspace = true }
+   fmu_from_struct = { workspace = true }
 
    [dev-dependencies]
    fmi-compliance = { path = "../../../testing/fmi-compliance" }

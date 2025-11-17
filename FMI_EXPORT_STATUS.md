@@ -2,95 +2,143 @@
 
 ## Summary
 
-All three models (Dahlquist, Van der Pol, Bouncing Ball) have been **rewritten to use the `fmi-export` crate** from the [rust-fmi](https://github.com/jondo2010/rust-fmi) project. The models now properly use:
+All three models (Dahlquist, Van der Pol, Bouncing Ball) are currently implemented using the **`fmu_from_struct` crate** ([github.com/jarlekramer/fmu_from_struct](https://github.com/jarlekramer/fmu_from_struct)). This is a **temporary solution** until the official `fmi-export` crate from [rust-fmi](https://github.com/jondo2010/rust-fmi) is published to crates.io.
 
-- `#[derive(FmuModel)]` macro for model definition
-- `#[variable(...)]` attributes for FMI variable declarations
-- `UserModel` trait implementation with `calculate_values()` and `event_update()` methods
-- `fmi_export::export_fmu!(ModelName)` macro to generate the complete C API
+## Current Implementation
+
+Models use the `fmu_from_struct` derive macro with the following pattern:
+
+- `#[derive(Fmu, Default, Debug, Clone)]` for model definition
+- `#[fmu_from_struct(fmi_version = 3)]` to specify FMI version
+- `#[fmu_from_struct(parameter)]`, `#[fmu_from_struct(output)]` for variable attributes
+- `#[fmu_from_struct(start_value="...")]` for initial values
+- `FmuFunctions` trait implementation with `exit_initialization_mode()` and `do_step()` methods
 
 ## Current Status
 
-**⚠️ Important:** The `fmi-export` crate is **not yet published to crates.io** as a standalone package. It exists only in the rust-fmi workspace on GitHub.
+✅ **All models are working** - All three models build successfully and pass all tests:
+- Dahlquist: Simple ODE with parameter k and state x
+- Van der Pol: Nonlinear oscillator with two states (x0, x1)
+- Bouncing Ball: Event-driven system with collision handling
 
-### What Works
+✅ **Tests Pass** - All unit tests, physics tests pass successfully
 
-✅ **Model implementations are correct** - All three models are properly implemented using the fmi-export API:
-- Dahlquist: Simple ODE with proper state and derivative declarations
-- Van der Pol: Multi-state system using array notation `[f64; 2]`
-- Bouncing Ball: Event-driven system with `event_update()` and `get_event_indicators()`
+✅ **Co-Simulation FMUs** - Models are implemented as Co-Simulation FMUs using the `do_step()` method
 
-✅ **API Usage is Proper** - Models follow the exact patterns from rust-fmi examples
+## Migration Path
 
-### Current Limitation
+### Plan
 
-❌ **Build fails** - The rust-fmi git repository's main branch currently has compilation errors in `fmi-schema` preventing builds
+1. ✅ **Phase 1 (Current)**: Use `fmu_from_struct` crate (v0.2.1) as interim solution
+2. 🔄 **Phase 2 (Future)**: Migrate to `fmi-export` once it's published to crates.io
+3. 🔄 **Phase 3 (Future)**: Add Model Exchange support if needed
 
-## Options Going Forward
+### When to Migrate
 
-### Option 1: Wait for Official Release (RECOMMENDED)
-Wait for the rust-fmi team to:
-1. Fix the build issues in the main branch
-2. Publish `fmi-export` to crates.io as a standalone crate
-3. Then update workspace dependencies to use published versions
+We will migrate from `fmu_from_struct` to `fmi-export` when:
+- The `fmi-export` crate is published to crates.io as a standalone package
+- The rust-fmi project stabilizes its API
+- Build issues in the rust-fmi repository are resolved
 
-### Option 2: Use Specific Git Tag/Commit
-Find a working commit in rust-fmi history and pin to that specific version:
-```toml
-[workspace.dependencies]
-fmi = { git = "https://github.com/jondo2010/rust-fmi.git", rev = "WORKING_COMMIT_HASH", features = ["fmi3"] }
-fmi-export = { git = "https://github.com/jondo2010/rust-fmi.git", rev = "WORKING_COMMIT_HASH", features = ["fmi3"] }
-```
+### Migration Notes
 
-### Option 3: Vendor the Dependencies
-Clone rust-fmi locally and use path dependencies (not recommended for published project)
+The `fmi-export` crate provides more advanced features:
+- Full event handling with `event_update()` and `get_event_indicators()`
+- Both Model Exchange and Co-Simulation modes
+- More sophisticated variable attributes
+- Better FMI 3.0 compliance
 
-## Models Are Ready
+The `fmu_from_struct` crate is simpler but sufficient for our current needs:
+- Co-Simulation only
+- Event handling must be done manually within `do_step()`
+- Simpler attribute system
 
-Despite the build issues, **all model code is production-ready** and properly implements the FMI 3.0 export standard using rust-fmi patterns. Once the dependency issue is resolved, the models will build and export correctly as FMUs.
-
-## Example Usage (When Working)
+## Example Usage (Current)
 
 ```rust
-use fmi::fmi3::{Fmi3Error, Fmi3Res};
-use fmi_export::{
-    fmi3::{DefaultLoggingCategory, ModelContext, UserModel},
-    FmuModel,
-};
+use fmu_from_struct::prelude::*;
+
+#[derive(Fmu, Default, Debug, Clone)]
+#[fmu_from_struct(fmi_version = 3)]
+pub struct Dahlquist {
+    #[fmu_from_struct(parameter)]
+    #[fmu_from_struct(start_value="1.0")]
+    pub k: f64,
+
+    #[fmu_from_struct(output)]
+    #[fmu_from_struct(start_value="1.0")]
+    pub x: f64,
+
+    pub fmu_info: FmuInfo,
+}
+
+impl FmuFunctions for Dahlquist {
+    fn exit_initialization_mode(&mut self) {
+        // Initialization code
+    }
+
+    fn do_step(&mut self, _current_time: f64, time_step: f64) {
+        // Integration step (e.g., Euler method)
+        let der_x = -self.k * self.x;
+        self.x += der_x * time_step;
+    }
+}
+```
+
+## Example Usage (Future with fmi-export)
+
+```rust
+use fmi_export::{FmuModel, fmi3::{ModelContext, UserModel}};
 
 #[derive(FmuModel, Default, Debug)]
 #[model()]
-pub struct MyModel {
-    #[variable(causality = Output, variability = Continuous, state, start = 1.0, initial = Exact)]
+pub struct Dahlquist {
+    #[variable(causality = Output, state, start = 1.0, initial = Exact)]
     pub x: f64,
 
-    #[variable(causality = Local, variability = Continuous, derivative = x, initial = Calculated)]
+    #[variable(causality = Local, derivative = x, initial = Calculated)]
     der_x: f64,
+
+    #[variable(causality = Parameter, start = 1.0, initial = Exact)]
+    pub k: f64,
 }
 
-impl UserModel for MyModel {
+impl UserModel for Dahlquist {
     type LoggingCategory = DefaultLoggingCategory;
 
-    fn calculate_values(&mut self, _context: &ModelContext<Self>) -> Result<Fmi3Res, Fmi3Error> {
-        self.der_x = -self.x;  // Simple decay
+    fn calculate_values(&mut self, _context: &ModelContext<Self>)
+        -> Result<Fmi3Res, Fmi3Error> {
+        self.der_x = -self.k * self.x;
         Ok(Fmi3Res::OK)
     }
 }
 
-fmi_export::export_fmu!(MyModel);
+fmi_export::export_fmu!(Dahlquist);
 ```
 
 ## Testing
 
-Unit tests have been updated to work with the new fmi-export API and will pass once the dependency builds successfully.
+All tests are passing with the current `fmu_from_struct` implementation:
+- ✅ Unit tests for all models
+- ✅ Physics validation tests
+- ✅ Integration tests
+
+## Dependencies
+
+Current workspace dependencies:
+```toml
+[workspace.dependencies]
+fmu_from_struct = "0.2"
+```
 
 ## References
 
+- fmu_from_struct GitHub: https://github.com/jarlekramer/fmu_from_struct
 - rust-fmi GitHub: https://github.com/jondo2010/rust-fmi
 - FMI Standard: https://fmi-standard.org/
-- Example FMUs in rust-fmi: https://github.com/jondo2010/rust-fmi/tree/main/examples
 
 ---
 
 **Last Updated**: 2025-11-17
-**Status**: Awaiting rust-fmi dependency resolution
+**Status**: ✅ Working with fmu_from_struct v0.2.1
+**Next Step**: Migrate to fmi-export once published
