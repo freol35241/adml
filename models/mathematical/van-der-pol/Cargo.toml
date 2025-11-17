@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 fmi = { workspace = true }
+fmi-export = { workspace = true }
 
 [dev-dependencies]
 fmi-compliance = { path = "../../../testing/fmi-compliance" }

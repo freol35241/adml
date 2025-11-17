@@ -9,145 +9,86 @@
 //! a stable limit cycle. The Van der Pol oscillator is important in
 //! studying self-sustaining oscillations in various physical systems.
 
-use std::ffi::c_void;
+use fmi::fmi3::{Fmi3Error, Fmi3Res};
+use fmi_export::{
+    fmi3::{DefaultLoggingCategory, ModelContext, UserModel},
+    FmuModel,
+};
 
-/// Van der Pol oscillator model
-#[repr(C)]
+/// Van der Pol oscillator FMU model
+///
+/// The Van der Pol oscillator is a non-conservative oscillator with non-linear damping.
+/// It evolves in time according to the second-order differential equation:
+/// d²x/dt² - μ(1 - x²)dx/dt + x = 0
+///
+/// This is implemented as a system of first-order ODEs:
+/// - der(x[0]) = x[1]
+/// - der(x[1]) = μ(1 - x[0]²)x[1] - x[0]
+#[derive(FmuModel, Default, Debug)]
+#[model()]
 pub struct VanDerPol {
-    /// Position-like state variable
-    pub x0: f64,
-    /// Velocity-like state variable
-    pub x1: f64,
-    /// Damping parameter (μ)
-    pub mu: f64,
-    /// Current simulation time
-    pub time: f64,
-}
+    /// State variables [x0, x1] where x0 is position-like and x1 is velocity-like
+    #[variable(causality = Output, variability = Continuous, state, start = [2.0, 0.0], initial = Exact)]
+    pub x: [f64; 2],
 
-impl Default for VanDerPol {
-    fn default() -> Self {
-        Self::new()
-    }
+    /// Derivatives [der(x0), der(x1)]
+    #[variable(causality = Local, variability = Continuous, derivative = x, initial = Calculated)]
+    der_x: [f64; 2],
+
+    /// Damping parameter μ
+    #[variable(causality = Parameter, variability = Fixed, start = 1.0, initial = Exact)]
+    pub mu: f64,
 }
 
 impl VanDerPol {
     /// Create a new Van der Pol oscillator with default parameters
     pub fn new() -> Self {
-        Self {
-            x0: 2.0,  // Default initial position
-            x1: 0.0,  // Default initial velocity
-            mu: 1.0,  // Default damping parameter
-            time: 0.0,
-        }
+        Self::default()
     }
 
-    /// Get the number of continuous states
-    pub fn get_number_of_continuous_states(&self) -> usize {
-        2
+    /// Get x0 (position-like variable)
+    pub fn x0(&self) -> f64 {
+        self.x[0]
     }
 
-    /// Get continuous states [x0, x1]
-    pub fn get_continuous_states(&self) -> Vec<f64> {
-        vec![self.x0, self.x1]
+    /// Get x1 (velocity-like variable)
+    pub fn x1(&self) -> f64 {
+        self.x[1]
     }
 
-    /// Set continuous states from [x0, x1]
-    pub fn set_continuous_states(&mut self, states: &[f64]) {
-        if states.len() >= 2 {
-            self.x0 = states[0];
-            self.x1 = states[1];
-        }
+    /// Set x0 (position-like variable)
+    pub fn set_x0(&mut self, value: f64) {
+        self.x[0] = value;
     }
 
-    /// Compute derivatives
-    ///
-    /// dx0/dt = x1
-    /// dx1/dt = μ * (1 - x0²) * x1 - x0
-    pub fn get_derivatives(&self) -> Vec<f64> {
-        let der_x0 = self.x1;
-        let der_x1 = self.mu * (1.0 - self.x0 * self.x0) * self.x1 - self.x0;
-        vec![der_x0, der_x1]
-    }
-
-    /// Perform a simple Euler integration step
-    pub fn do_step(&mut self, dt: f64) {
-        let derivatives = self.get_derivatives();
-        self.x0 += derivatives[0] * dt;
-        self.x1 += derivatives[1] * dt;
-        self.time += dt;
+    /// Set x1 (velocity-like variable)
+    pub fn set_x1(&mut self, value: f64) {
+        self.x[1] = value;
     }
 
     /// Calculate total energy (not conserved for Van der Pol)
     pub fn total_energy(&self) -> f64 {
-        0.5 * self.x0 * self.x0 + 0.5 * self.x1 * self.x1
+        0.5 * self.x[0] * self.x[0] + 0.5 * self.x[1] * self.x[1]
     }
 }
 
-// FMI 3.0 C API functions
+impl UserModel for VanDerPol {
+    type LoggingCategory = DefaultLoggingCategory;
 
-#[no_mangle]
-pub extern "C" fn fmi3_vanderpol_create() -> *mut c_void {
-    let model = Box::new(VanDerPol::new());
-    Box::into_raw(model) as *mut c_void
-}
+    fn calculate_values(&mut self, _context: &ModelContext<Self>) -> Result<Fmi3Res, Fmi3Error> {
+        // Calculate the derivatives according to Van der Pol equations:
+        // der(x[0]) = x[1]
+        self.der_x[0] = self.x[1];
 
-#[no_mangle]
-pub extern "C" fn fmi3_vanderpol_free(instance: *mut c_void) {
-    if !instance.is_null() {
-        unsafe {
-            let _ = Box::from_raw(instance as *mut VanDerPol);
-        }
+        // der(x[1]) = mu * ((1 - x[0]²) * x[1]) - x[0]
+        self.der_x[1] = self.mu * ((1.0 - self.x[0] * self.x[0]) * self.x[1]) - self.x[0];
+
+        Ok(Fmi3Res::OK)
     }
 }
 
-#[no_mangle]
-pub extern "C" fn fmi3_vanderpol_get_float64(
-    instance: *mut c_void,
-    value_reference: u32,
-    value: *mut f64,
-) -> i32 {
-    if instance.is_null() || value.is_null() {
-        return -1;
-    }
-
-    let model = unsafe { &*(instance as *const VanDerPol) };
-
-    unsafe {
-        match value_reference {
-            0 => *value = model.time,  // time
-            1 => *value = model.x0,    // x0
-            2 => *value = model.x1,    // der(x0) = x1
-            3 => *value = model.x1,    // x1
-            4 => *value = model.mu * (1.0 - model.x0 * model.x0) * model.x1 - model.x0,  // der(x1)
-            5 => *value = model.mu,    // mu
-            _ => return -1,
-        }
-    }
-
-    0
-}
-
-#[no_mangle]
-pub extern "C" fn fmi3_vanderpol_set_float64(
-    instance: *mut c_void,
-    value_reference: u32,
-    value: f64,
-) -> i32 {
-    if instance.is_null() {
-        return -1;
-    }
-
-    let model = unsafe { &mut *(instance as *mut VanDerPol) };
-
-    match value_reference {
-        1 => model.x0 = value,    // x0
-        3 => model.x1 = value,    // x1
-        5 => model.mu = value,    // mu
-        _ => return -1,
-    }
-
-    0
-}
+// Export the FMU with full C API
+fmi_export::export_fmu!(VanDerPol);
 
 #[cfg(test)]
 mod tests {
@@ -156,53 +97,59 @@ mod tests {
     #[test]
     fn test_initial_values() {
         let model = VanDerPol::new();
-        assert_eq!(model.x0, 2.0);
-        assert_eq!(model.x1, 0.0);
+        assert_eq!(model.x[0], 2.0);
+        assert_eq!(model.x[1], 0.0);
         assert_eq!(model.mu, 1.0);
-        assert_eq!(model.time, 0.0);
     }
 
     #[test]
-    fn test_derivatives() {
-        let model = VanDerPol::new();
-        let derivatives = model.get_derivatives();
-        assert_eq!(derivatives.len(), 2);
-        assert_eq!(derivatives[0], 0.0); // x1 = 0
-        // μ * (1 - x0²) * x1 - x0 = 1.0 * (1 - 4) * 0 - 2.0 = -2.0
-        assert_eq!(derivatives[1], -2.0);
-    }
-
-    #[test]
-    fn test_state_operations() {
+    fn test_derivative_calculation() {
         let mut model = VanDerPol::new();
+        let context = ModelContext::default();
 
-        assert_eq!(model.get_number_of_continuous_states(), 2);
+        model.calculate_values(&context).unwrap();
 
-        let states = model.get_continuous_states();
-        assert_eq!(states.len(), 2);
-        assert_eq!(states[0], 2.0);
-        assert_eq!(states[1], 0.0);
+        // der(x[0]) = x[1] = 0.0
+        assert_eq!(model.der_x[0], 0.0);
 
-        model.set_continuous_states(&[1.0, 0.5]);
-        assert_eq!(model.x0, 1.0);
-        assert_eq!(model.x1, 0.5);
+        // der(x[1]) = μ * ((1 - x[0]²) * x[1]) - x[0]
+        //           = 1.0 * ((1 - 4.0) * 0.0) - 2.0
+        //           = -2.0
+        assert_eq!(model.der_x[1], -2.0);
     }
 
     #[test]
     fn test_nonlinear_damping() {
         let mut model = VanDerPol::new();
+        let context = ModelContext::default();
         model.mu = 2.0;
 
         // Test that damping term changes sign based on x0
-        model.x0 = 0.5;
-        model.x1 = 1.0;
-        let der1 = model.get_derivatives()[1];
+        model.x[0] = 0.5;
+        model.x[1] = 1.0;
+        model.calculate_values(&context).unwrap();
+        let der1 = model.der_x[1];
 
-        model.x0 = 2.0;
-        let der2 = model.get_derivatives()[1];
+        model.x[0] = 2.0;
+        model.calculate_values(&context).unwrap();
+        let der2 = model.der_x[1];
 
         // For small x0, damping is negative (energy input)
         // For large x0, damping is positive (energy dissipation)
         assert!(der1 > der2);
+    }
+
+    #[test]
+    fn test_accessors() {
+        let mut model = VanDerPol::new();
+
+        assert_eq!(model.x0(), 2.0);
+        assert_eq!(model.x1(), 0.0);
+
+        model.set_x0(1.5);
+        model.set_x1(0.5);
+
+        assert_eq!(model.x0(), 1.5);
+        assert_eq!(model.x1(), 0.5);
     }
 }
