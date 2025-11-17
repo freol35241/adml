@@ -1,7 +1,7 @@
 //! Physics validation tests for the Bouncing Ball model
 
 use approx::assert_relative_eq;
-use odml_bouncing_ball::BouncingBall;
+use odml_bouncing_ball::{BouncingBall, FmuFunctions};
 
 #[test]
 fn test_energy_calculation() {
@@ -23,23 +23,15 @@ fn test_energy_calculation() {
 
 #[test]
 fn test_collision_event_handling() {
-    use fmi::{EventFlags};
-    use fmi_export::fmi3::{ModelContext, UserModel};
-
     let mut model = BouncingBall::new();
-    let context = ModelContext::default();
-    let mut event_flags = EventFlags::default();
 
     // Setup collision scenario
     model.h = 0.0;
     model.v = -2.0;
     let initial_v = model.v.abs();
 
-    // Trigger collision
-    model.event_update(&context, &mut event_flags).unwrap();
-
-    // Check that event was handled
-    assert!(event_flags.values_of_continuous_states_changed);
+    // Trigger collision via do_step
+    model.do_step(0.0, 0.01);
 
     // Check velocity was reversed with restitution
     let expected_v = initial_v * model.e;
@@ -51,12 +43,7 @@ fn test_collision_event_handling() {
 
 #[test]
 fn test_energy_loss_per_bounce() {
-    use fmi::EventFlags;
-    use fmi_export::fmi3::{ModelContext, UserModel};
-
     let mut model = BouncingBall::new();
-    let context = ModelContext::default();
-    let mut event_flags = EventFlags::default();
 
     model.h = 1.0;
     model.v = 0.0;
@@ -66,28 +53,23 @@ fn test_energy_loss_per_bounce() {
     model.h = 0.0;
     model.v = -4.43; // Approximate velocity when falling from h=1.0
 
-    model.event_update(&context, &mut event_flags).unwrap();
-
+    let energy_before_bounce = model.total_energy();
+    model.do_step(0.0, 0.01);
     let energy_after_bounce = model.total_energy();
 
     // Energy should decrease (not perfectly e² because of height adjustment)
-    assert!(energy_after_bounce < initial_energy);
+    assert!(energy_after_bounce < energy_before_bounce);
 }
 
 #[test]
 fn test_stopping_condition() {
-    use fmi::EventFlags;
-    use fmi_export::fmi3::{ModelContext, UserModel};
-
     let mut model = BouncingBall::new();
-    let context = ModelContext::default();
-    let mut event_flags = EventFlags::default();
 
     // Set velocity below threshold
     model.h = 0.0;
     model.v = -0.05; // Below v_min = 0.1
 
-    model.event_update(&context, &mut event_flags).unwrap();
+    model.do_step(0.0, 0.01);
 
     // Ball should have stopped
     assert_eq!(model.v, 0.0);
@@ -96,21 +78,68 @@ fn test_stopping_condition() {
 
 #[test]
 fn test_no_collision_above_ground() {
-    use fmi::EventFlags;
-    use fmi_export::fmi3::{ModelContext, UserModel};
-
     let mut model = BouncingBall::new();
-    let context = ModelContext::default();
-    let mut event_flags = EventFlags::default();
 
     // Ball above ground
     model.h = 0.5;
     model.v = -1.0;
     let initial_v = model.v;
 
-    model.event_update(&context, &mut event_flags).unwrap();
+    model.do_step(0.0, 0.01);
 
-    // No event should have occurred
-    assert!(!event_flags.values_of_continuous_states_changed);
-    assert_eq!(model.v, initial_v); // Velocity unchanged
+    // Velocity should have become more negative due to gravity
+    assert!(model.v < initial_v);
+}
+
+#[test]
+fn test_free_fall_acceleration() {
+    let mut model = BouncingBall::new();
+    model.h = 10.0;
+    model.v = 0.0;
+
+    let dt = 0.1;
+
+    // Take one step
+    model.do_step(0.0, dt);
+
+    // Expected velocity change: dv = g * dt
+    let expected_v = 0.0 + model.g * dt;
+    assert_relative_eq!(model.v, expected_v, epsilon = 1e-10);
+
+    // Expected height change: dh = v_initial * dt (since v_initial = 0)
+    let expected_h = 10.0; // No change in first step since v_initial = 0
+    assert_relative_eq!(model.h, expected_h, epsilon = 1e-10);
+}
+
+#[test]
+fn test_multiple_bounces() {
+    let mut model = BouncingBall::new();
+    model.h = 1.0;
+    model.v = 0.0;
+
+    let mut bounce_count = 0;
+    let dt = 0.001;
+
+    // Simulate for a period of time
+    for _ in 0..10000 {
+        let v_before = model.v;
+        model.do_step(0.0, dt);
+
+        // Detect bounce (velocity changed from negative to positive)
+        if v_before < 0.0 && model.v > 0.0 {
+            bounce_count += 1;
+        }
+
+        // Stop if ball has stopped bouncing
+        if model.g == 0.0 {
+            break;
+        }
+    }
+
+    // Ball should have bounced at least once
+    assert!(bounce_count > 0, "Ball should bounce at least once");
+
+    // Ball should have stopped eventually
+    assert_eq!(model.v, 0.0, "Ball should eventually stop");
+    assert_eq!(model.g, 0.0, "Gravity should be disabled when stopped");
 }
