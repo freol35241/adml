@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop, claude/* ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Detect which models have changed
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      models: ${{ steps.filter.outputs.models }}
+      test-all: ${{ steps.check.outputs.test-all }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check if should test all models
+        id: check
+        run: |
+          # Test all models on main branch or if core files changed
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || \
+             git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E "(Cargo.toml|testing/|\.github/)"; then
+            echo "test-all=true" >> $GITHUB_OUTPUT
+          else
+            echo "test-all=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Find changed models
+        id: filter
+        run: |
+          if [[ "${{ steps.check.outputs.test-all }}" == "true" ]]; then
+            # Find all models
+            models=$(find models -mindepth 2 -maxdepth 2 -type d -name '[!.]*' | jq -R -s -c 'split("\n")[:-1] | map(select(length > 0))')
+          else
+            # Find only changed models
+            changed_files=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+            models=$(echo "$changed_files" | grep "^models/" | cut -d/ -f1-3 | sort -u | jq -R -s -c 'split("\n")[:-1] | map(select(length > 0))')
+          fi
+
+          echo "models=$models" >> $GITHUB_OUTPUT
+          echo "Found models to test:"
+          echo "$models" | jq -r '.[]'
+
+  # Check workspace-level integrity
+  workspace-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Workspace format check
+        run: cargo fmt --all -- --check
+
+      - name: Workspace clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Build workspace
+        run: cargo build --workspace
+
+  # Test individual models
+  test-models:
+    needs: [detect-changes, workspace-check]
+    if: ${{ needs.detect-changes.outputs.models != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        model: ${{ fromJson(needs.detect-changes.outputs.models) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.model }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Extract model info
+        id: info
+        run: |
+          model_name=$(basename ${{ matrix.model }})
+          echo "name=$model_name" >> $GITHUB_OUTPUT
+
+      - name: Run unit tests
+        working-directory: ${{ matrix.model }}
+        run: cargo test --lib
+
+      - name: Run integration tests
+        working-directory: ${{ matrix.model }}
+        run: cargo test --tests
+
+      - name: Build release binary
+        working-directory: ${{ matrix.model }}
+        run: cargo build --release
+
+      - name: Summary
+        run: |
+          echo "## ✅ ${{ steps.info.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "All tests passed for ${{ matrix.model }}" >> $GITHUB_STEP_SUMMARY
+
+  # Documentation build
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-docs-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build documentation
+        run: cargo doc --workspace --no-deps
+
+      - name: Create index redirect
+        run: |
+          echo '<meta http-equiv="refresh" content="0; url=odml_dahlquist/index.html">' > target/doc/index.html
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./target/doc
+
+  # Final status check
+  ci-success:
+    needs: [workspace-check, test-models, docs]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.workspace-check.result }}" != "success" ]] || \
+             [[ "${{ needs.test-models.result }}" != "success" && "${{ needs.test-models.result }}" != "skipped" ]] || \
+             [[ "${{ needs.docs.result }}" != "success" ]]; then
+            echo "CI failed"
+            exit 1
+          fi
+          echo "✅ All CI checks passed"

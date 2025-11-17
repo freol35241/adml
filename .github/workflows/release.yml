@@ -1,0 +1,235 @@
+name: Build and Release FMUs
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_name:
+        description: 'Release name (e.g., "2025-11-17" or "Monthly Release")'
+        required: true
+        default: ''
+  push:
+    tags:
+      - 'release-*'
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Discover all models in the repository
+  discover-models:
+    runs-on: ubuntu-latest
+    outputs:
+      models: ${{ steps.find-models.outputs.models }}
+      model-count: ${{ steps.find-models.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find all models
+        id: find-models
+        run: |
+          models=$(find models -mindepth 2 -maxdepth 2 -type d -name '[!.]*' | jq -R -s -c 'split("\n")[:-1] | map(select(length > 0))')
+          count=$(echo "$models" | jq 'length')
+
+          echo "Found $count models:"
+          echo "$models" | jq -r '.[]'
+
+          echo "models=$models" >> $GITHUB_OUTPUT
+          echo "count=$count" >> $GITHUB_OUTPUT
+
+  # Build binaries for all platforms
+  build-binaries:
+    needs: discover-models
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        model: ${{ fromJson(needs.discover-models.outputs.models) }}
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-pc-windows-gnu
+          - aarch64-unknown-linux-gnu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Cache cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-${{ matrix.model }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Extract model metadata
+        id: metadata
+        working-directory: ${{ matrix.model }}
+        run: |
+          MODEL_NAME=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].metadata.fmi.model_name // .packages[0].name')
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          CRATE_NAME=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')
+
+          echo "model_name=$MODEL_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "crate_name=$CRATE_NAME" >> $GITHUB_OUTPUT
+          echo "Building $MODEL_NAME v$VERSION for ${{ matrix.target }}"
+
+      - name: Build with cross
+        run: |
+          cross build --release --target ${{ matrix.target }} --manifest-path ${{ matrix.model }}/Cargo.toml
+
+      - name: Determine library name and extension
+        id: lib-info
+        run: |
+          case "${{ matrix.target }}" in
+            *windows*)
+              EXT="dll"
+              PREFIX=""
+              ;;
+            *darwin*)
+              EXT="dylib"
+              PREFIX="lib"
+              ;;
+            *)
+              EXT="so"
+              PREFIX="lib"
+              ;;
+          esac
+
+          CRATE_NAME_UNDERSCORE=$(echo "${{ steps.metadata.outputs.crate_name }}" | tr '-' '_')
+          LIB_NAME="${PREFIX}${CRATE_NAME_UNDERSCORE}.${EXT}"
+
+          echo "lib_name=$LIB_NAME" >> $GITHUB_OUTPUT
+          echo "ext=$EXT" >> $GITHUB_OUTPUT
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: binary-${{ steps.metadata.outputs.model_name }}-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/${{ steps.lib-info.outputs.lib_name }}
+          retention-days: 7
+
+  # Create GitHub release with all binaries
+  create-release:
+    needs: [discover-models, build-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: binaries/
+
+      - name: List downloaded binaries
+        run: |
+          echo "📦 Downloaded binaries:"
+          find binaries/ -type f -exec ls -lh {} \;
+
+      - name: Determine release name
+        id: release-name
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            RELEASE_NAME="${{ github.event.inputs.release_name }}"
+          else
+            RELEASE_NAME="${GITHUB_REF#refs/tags/release-}"
+          fi
+
+          if [ -z "$RELEASE_NAME" ]; then
+            RELEASE_NAME="release-$(date +%Y-%m-%d)"
+          fi
+
+          TAG="release-$(date +%Y%m%d-%H%M%S)"
+
+          echo "name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Release: $RELEASE_NAME (tag: $TAG)"
+
+      - name: Generate release notes
+        run: |
+          cat > release-notes.md << 'EOF'
+          # ODML - Open Dynamical Model Library
+
+          Pre-built binaries for FMI 3.0 compatible dynamical models.
+
+          ## 📦 Models in this Release
+
+          This release includes the following models:
+
+          EOF
+
+          # List all models
+          find models -mindepth 2 -maxdepth 2 -type d -name '[!.]*' | while read model_dir; do
+            model_name=$(basename "$model_dir")
+            if [ -f "$model_dir/README.md" ]; then
+              description=$(head -n 3 "$model_dir/README.md" | tail -n 1)
+              echo "- **$model_name**: $description" >> release-notes.md
+            else
+              echo "- **$model_name**" >> release-notes.md
+            fi
+          done
+
+          cat >> release-notes.md << 'EOF'
+
+          ## 🏗️ Built For
+
+          - **Linux x86_64** (.so files)
+          - **Windows x86_64** (.dll files)
+          - **Linux ARM64** (.so files)
+
+          ## 📝 Note on FMU Packaging
+
+          These are raw binaries compatible with FMI 3.0. To use them as FMUs:
+          1. Download the appropriate binary for your platform
+          2. Package it with a modelDescription.xml file
+          3. Place in the correct directory structure according to FMI 3.0 spec
+
+          Full FMU packaging will be available in future releases.
+
+          ## 🧪 Testing
+
+          All models include comprehensive test suites:
+          - Unit tests for code correctness
+          - FMI API compliance tests
+          - Physics validation tests
+
+          ## 📚 Documentation
+
+          For detailed documentation on each model, see the [repository](https://github.com/${{ github.repository }}).
+          EOF
+
+          cat release-notes.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ steps.release-name.outputs.name }}
+          tag_name: ${{ steps.release-name.outputs.tag }}
+          body_path: release-notes.md
+          files: binaries/**/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## 🎉 Release Created!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release:** ${{ steps.release-name.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ steps.release-name.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Models:** ${{ needs.discover-models.outputs.model-count }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Binary Count" >> $GITHUB_STEP_SUMMARY
+          find binaries/ -type f | wc -l >> $GITHUB_STEP_SUMMARY
