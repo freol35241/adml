@@ -1,0 +1,19 @@
+# Python requirements for FMU testing
+# Install with: pip install -r testing/requirements.txt
+
+# FMU simulation and loading
+fmpy>=0.3.20
+
+# Numerical computation
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Plotting (optional, for visualization)
+matplotlib>=3.7.0
+
+# Testing
+pytest>=7.4.0
+pytest-xdist>=3.3.0  # Parallel test execution
+
+# FMU compliance checking (if available via pip)
+# Note: FMU Checker is typically distributed as a standalone tool

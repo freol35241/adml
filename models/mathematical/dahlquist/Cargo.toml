@@ -1,0 +1,25 @@
+[package]
+name = "adml-dahlquist"
+version = "1.0.0"
+edition = "2021"
+description = "Dahlquist test equation: dx/dt = -k*x"
+authors = ["ADML Contributors"]
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+fmu_from_struct = { workspace = true }
+
+[dev-dependencies]
+physics-framework = { path = "../../../testing/physics-framework" }
+approx = { workspace = true }
+
+# FMI-specific metadata
+[package.metadata.fmi]
+model_name = "Dahlquist"
+fmi_version = "3.0"
+guid = "221063d2-ef4a-45fe-b954-b5bfeea9a59b"
+description = "Dahlquist test equation for ODE solvers"
