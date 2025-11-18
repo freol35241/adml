@@ -1,0 +1,32 @@
+# Plot configuration for Van der Pol oscillator
+# See docs/plot_config_spec.md for full documentation
+
+title = "Van der Pol Oscillator (μ=1.0)"
+
+[simulation]
+stop_time = 30.0
+output_interval = 0.05
+
+[parameters]
+mu = 1.0
+
+[[subplot]]
+type = "timeseries"
+title = "State Variables vs Time"
+xlabel = "Time [s]"
+ylabel = "State"
+variables = ["x0", "x1"]
+labels = ["x₀ (position)", "x₁ (velocity)"]
+colors = ["blue", "red"]
+linewidths = [1.5, 1.5]
+
+[[subplot]]
+type = "phase_portrait"
+title = "Phase Portrait - Limit Cycle"
+x_variable = "x0"
+y_variable = "x1"
+xlabel = "x₀ (position)"
+ylabel = "x₁ (velocity)"
+equal_aspect = true
+color = "green"
+show_markers = true

@@ -8,6 +8,8 @@
 //!
 //! This is a fundamental test case for ODE solvers, useful for studying
 //! stability and accuracy of numerical integration methods.
+//!
+//! The Dahlquist test equation is particularly useful for analyzing stiff solvers.
 
 // Allow clippy lints for generated code from fmu_from_struct derive macro
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
