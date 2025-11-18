@@ -16,7 +16,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Build FMUs for all models
+  # Build multi-platform FMUs for all models (Linux + Windows binaries in single FMU)
   build-fmus:
     runs-on: ubuntu-latest
     steps:
@@ -25,18 +25,32 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install FMU packaging tool
+      - name: Install cross
         run: |
-          cargo install package_fmu_after_build
+          cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Build all FMUs
+      - name: Install zip utility
         run: |
-          ./scripts/build-all-fmus.sh
+          sudo apt-get update
+          sudo apt-get install -y zip
+
+      - name: Build all multi-platform FMUs
+        run: |
+          ./scripts/build-all-multiplatform-fmus.sh
 
       - name: List built FMUs
         run: |
-          echo "Built FMUs:"
+          echo "Built multi-platform FMUs (Linux x86_64 + Windows x86_64):"
           ls -lh fmus/*.fmu
+
+      - name: Verify FMU contents
+        run: |
+          echo "Verifying multi-platform FMU structure..."
+          for fmu in fmus/*.fmu; do
+            echo ""
+            echo "Contents of $(basename $fmu):"
+            unzip -l "$fmu" | grep -E "(binaries|modelDescription)"
+          done
 
       - name: Upload FMU artifacts
         uses: actions/upload-artifact@v4
@@ -61,7 +75,7 @@ jobs:
 
       - name: List downloaded FMUs
         run: |
-          echo "📦 FMU files for release:"
+          echo "📦 Multi-platform FMU files for release:"
           ls -lh fmus/*.fmu
 
       - name: Determine release details
@@ -94,6 +108,12 @@ jobs:
 
           FMI 3.0 compatible FMU files ready to use in any FMI-supporting simulation tool.
 
+          **Each FMU contains binaries for multiple platforms:**
+          - ✅ **Linux x86_64** - Native .so library
+          - ✅ **Windows x86_64** - Native .dll library
+
+          Download once, run anywhere!
+
           ## 📦 Models in this Release
 
           EOF
@@ -101,7 +121,7 @@ jobs:
           # List models with descriptions
           for fmu in fmus/*.fmu; do
             model_name=$(basename "$fmu" .fmu)
-            echo "- **$model_name.fmu** - FMI 3.0 Co-Simulation model" >> release-notes.md
+            echo "- **$model_name.fmu** - Multi-platform FMI 3.0 Co-Simulation model" >> release-notes.md
           done
 
           cat >> release-notes.md << 'EOF'
@@ -109,12 +129,14 @@ jobs:
           ## 🚀 How to Use
 
           1. Download the FMU file for your desired model
-          2. Load it in any FMI 3.0 compatible tool:
-             - FMPy (Python)
-             - Dymola
-             - Simulink with FMI Toolbox
-             - OpenModelica
+          2. Load it in any FMI 3.0 compatible tool on Linux or Windows:
+             - **FMPy** (Python) - Cross-platform
+             - **Dymola** - Windows/Linux
+             - **Simulink** with FMI Toolbox - Windows/Linux
+             - **OpenModelica** - Cross-platform
              - And many more...
+
+          The FMU will automatically use the correct binary for your platform!
 
           ## ✅ Testing
 
@@ -137,8 +159,9 @@ jobs:
 
           - **FMI Version**: 3.0
           - **Mode**: Co-Simulation
-          - **Platform**: Linux x86_64
+          - **Platforms**: Linux x86_64, Windows x86_64 (both in each FMU)
           - **Built with**: Rust + fmu_from_struct
+          - **Cross-compiled**: Using cross (cross-rs)
 
           EOF
 
@@ -165,7 +188,10 @@ jobs:
           echo "**Release:** ${{ steps.release-details.outputs.name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Tag:** ${{ steps.release-details.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 FMU Files" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Multi-Platform FMU Files" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Each FMU contains binaries for **Linux x86_64** and **Windows x86_64**:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           ls fmus/*.fmu | while read fmu; do
             echo "- $(basename $fmu)" >> $GITHUB_STEP_SUMMARY
           done
