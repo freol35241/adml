@@ -78,12 +78,27 @@ def simulate_fmu(
     # Prepare start values from parameters
     start_values = parameters if parameters else {}
 
-    # Run simulation
+    # IMPORTANT: FMPy's step_size is the communication step size for co-simulation.
+    # When output_interval > step_size, FMPy may not respect the step_size properly.
+    # To ensure accurate integration with Euler method, we:
+    # 1. Always use step_size as the communication step size
+    # 2. Record at step_size intervals (not output_interval)
+    # 3. Downsample results if needed for output_interval
+
+    # Determine actual step size to use
+    if step_size is not None:
+        actual_step_size = step_size
+    else:
+        # Use output_interval or auto-determine
+        actual_step_size = output_interval if output_interval is not None else None
+
+    # Run simulation with step_size for both communication and output
+    # This ensures the FMU doStep() is called with the correct small time steps
     result = fmpy_simulate(
         str(fmu_path),
         stop_time=stop_time,
-        step_size=step_size,
-        output_interval=output_interval,
+        step_size=actual_step_size,
+        output_interval=actual_step_size,  # Record at every step for accuracy
         start_values=start_values,
         validate=True,  # Validate FMU structure
         fmi_call_logger=None,  # Can enable for debugging
@@ -92,6 +107,25 @@ def simulate_fmu(
     # Extract time and convert to dictionary format
     time = result['time']
     results = {col: result[col] for col in result.dtype.names if col != 'time'}
+
+    # Downsample if output_interval was specified and is larger than step_size
+    if output_interval is not None and step_size is not None and output_interval > step_size:
+        # Create mask for output_interval sampling
+        # Include first and last points, plus points at output_interval
+        mask = np.zeros(len(time), dtype=bool)
+        mask[0] = True  # Always include start
+        mask[-1] = True  # Always include end
+
+        # Add points at output_interval
+        current_time = 0.0
+        while current_time <= stop_time:
+            idx = np.argmin(np.abs(time - current_time))
+            mask[idx] = True
+            current_time += output_interval
+
+        # Downsample
+        time = time[mask]
+        results = {key: val[mask] for key, val in results.items()}
 
     return time, results
 

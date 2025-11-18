@@ -52,12 +52,32 @@ All models are:
 git clone https://github.com/freol35241/odml.git
 cd odml
 
-# Build all models
+# Build all models (Rust libraries)
 cargo build --workspace --release
 
 # Or use the helper script
 ./scripts/build-all.sh
 ```
+
+### Building FMU Files
+
+To package models as standalone FMU files:
+
+```bash
+# Install FMU packaging tool
+cargo install package_fmu_after_build
+
+# Build all FMUs
+./scripts/build-all-fmus.sh
+
+# Or build a single FMU
+./scripts/build-fmu.sh models/mathematical/dahlquist
+
+# FMU files are created in: fmus/
+# Example: fmus/Dahlquist.fmu, fmus/VanDerPol.fmu, fmus/BouncingBall.fmu
+```
+
+FMU files can be loaded in any FMI 3.0 compatible simulation tool (FMPy, Dymola, Simulink, etc.).
 
 ### Running Tests
 
@@ -104,6 +124,9 @@ odml/
 │
 ├── scripts/                   # Helper scripts
 │   ├── build-all.sh          # Build all models
+│   ├── build-all-fmus.sh     # Build all FMU files
+│   ├── build-fmu.sh          # Build a single FMU
+│   ├── check-fmu-compliance.sh # Check FMU compliance
 │   ├── test-all.sh           # Test all models
 │   └── check-model.sh        # Check a single model
 │
@@ -296,16 +319,14 @@ Models are inspired by and validated against the [Modelica Reference-FMUs](https
 
 ## 🗺️ Roadmap
 
-- [ ] Full FMU packaging tool
+- [x] ✅ Full FMU packaging and building
+- [x] ✅ FMU integration testing with FMPy
 - [ ] More mechanical models (pendulum, spring-damper)
 - [ ] Electrical models (RC circuits, motors)
 - [ ] Thermal models (heat exchangers)
 - [ ] Hydraulic models
-- [ ] Model Exchange and Co-Simulation modes
+- [ ] Model Exchange mode (currently only Co-Simulation)
 - [ ] FMI 3.0 advanced features (clocks, structured naming)
-- [ ] Python bindings for easy testing
+- [ ] Tunable initial conditions for state variables
 - [ ] Performance benchmarks
-
----
-
-**Note:** This is an early-stage project. Models are provided as cdylib binaries. Full FMU packaging (with modelDescription.xml and proper directory structure) is planned for future releases.
+- [ ] CI/CD integration for FMU builds
