@@ -9,6 +9,10 @@
 //! This is a fundamental test case for ODE solvers, useful for studying
 //! stability and accuracy of numerical integration methods.
 
+// Allow clippy lints for generated code from fmu_from_struct derive macro
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::ptr_offset_with_cast)]
+
 pub use fmu_from_struct::prelude::*;
 
 /// Dahlquist test equation model
@@ -18,12 +22,12 @@ pub use fmu_from_struct::prelude::*;
 #[fmu_from_struct(fmi_version = 3)]
 pub struct Dahlquist {
     #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value="1.0")]
+    #[fmu_from_struct(start_value = "1.0")]
     /// Decay constant k
     pub k: f64,
 
     #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value="1.0")]
+    #[fmu_from_struct(start_value = "1.0")]
     /// State variable x
     pub x: f64,
 
@@ -73,7 +77,7 @@ mod tests {
 
     #[test]
     fn test_derivative_calculation() {
-        let mut model = Dahlquist::new();
+        let model = Dahlquist::new();
 
         // Manually calculate what one step should do
         let der_x = -model.k * model.x; // -1.0 * 1.0 = -1.0

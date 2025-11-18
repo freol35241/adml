@@ -9,6 +9,10 @@
 //! a stable limit cycle. The Van der Pol oscillator is important in
 //! studying self-sustaining oscillations in various physical systems.
 
+// Allow clippy lints for generated code from fmu_from_struct derive macro
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::ptr_offset_with_cast)]
+
 pub use fmu_from_struct::prelude::*;
 
 /// Van der Pol oscillator model
@@ -24,17 +28,17 @@ pub use fmu_from_struct::prelude::*;
 #[fmu_from_struct(fmi_version = 3)]
 pub struct VanDerPol {
     #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value="1.0")]
+    #[fmu_from_struct(start_value = "1.0")]
     /// Damping parameter μ
     pub mu: f64,
 
     #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value="2.0")]
+    #[fmu_from_struct(start_value = "2.0")]
     /// State variable x0 (position-like)
     pub x0: f64,
 
     #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value="0.0")]
+    #[fmu_from_struct(start_value = "0.0")]
     /// State variable x1 (velocity-like)
     pub x1: f64,
 
@@ -127,7 +131,7 @@ mod tests {
     fn test_do_step() {
         let mut model = VanDerPol::new();
 
-        let initial_x0 = model.x0;
+        let _initial_x0 = model.x0;
         let initial_x1 = model.x1;
         let dt = 0.1;
 

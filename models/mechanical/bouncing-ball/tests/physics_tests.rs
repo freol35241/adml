@@ -47,7 +47,7 @@ fn test_energy_loss_per_bounce() {
 
     model.h = 1.0;
     model.v = 0.0;
-    let initial_energy = model.total_energy();
+    let _initial_energy = model.total_energy();
 
     // Simulate a bounce
     model.h = 0.0;

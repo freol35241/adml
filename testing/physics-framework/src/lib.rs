@@ -9,11 +9,7 @@ pub mod assertions {
     use super::*;
 
     /// Assert that energy is conserved within a tolerance
-    pub fn assert_energy_conserved(
-        initial_energy: f64,
-        final_energy: f64,
-        tolerance: f64,
-    ) {
+    pub fn assert_energy_conserved(initial_energy: f64, final_energy: f64, tolerance: f64) {
         let diff = (final_energy - initial_energy).abs();
         assert!(
             diff < tolerance,
@@ -26,11 +22,7 @@ pub mod assertions {
     /// Assert that a steady state has been reached
     ///
     /// Checks if values in the window have stabilized within tolerance
-    pub fn assert_steady_state(
-        values: &[f64],
-        window: usize,
-        tolerance: f64,
-    ) {
+    pub fn assert_steady_state(values: &[f64], window: usize, tolerance: f64) {
         assert!(
             values.len() >= window,
             "Not enough values to check steady state"

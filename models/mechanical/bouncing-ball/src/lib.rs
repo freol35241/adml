@@ -10,6 +10,10 @@
 //! - Reverse velocity with coefficient of restitution: v = -e * v
 //! - Stop bouncing when |v| < v_min
 
+// Allow clippy lints for generated code from fmu_from_struct derive macro
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::ptr_offset_with_cast)]
+
 pub use fmu_from_struct::prelude::*;
 
 /// Bouncing Ball FMU model
@@ -20,22 +24,22 @@ pub use fmu_from_struct::prelude::*;
 #[fmu_from_struct(fmi_version = 3)]
 pub struct BouncingBall {
     #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value="-9.81")]
+    #[fmu_from_struct(start_value = "-9.81")]
     /// Gravitational acceleration (m/s²), typically negative
     pub g: f64,
 
     #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value="0.7")]
+    #[fmu_from_struct(start_value = "0.7")]
     /// Coefficient of restitution (0 < e < 1)
     pub e: f64,
 
     #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value="1.0")]
+    #[fmu_from_struct(start_value = "1.0")]
     /// Height above ground (m)
     pub h: f64,
 
     #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value="0.0")]
+    #[fmu_from_struct(start_value = "0.0")]
     /// Vertical velocity (m/s)
     pub v: f64,
 
@@ -57,7 +61,7 @@ impl FmuFunctions for BouncingBall {
         if self.h <= 0.0 && self.v < 0.0 {
             // Ball has hit the ground
             self.h = f64::MIN_POSITIVE; // Place slightly above ground
-            self.v = -self.v * self.e;   // Reverse velocity with energy loss
+            self.v = -self.v * self.e; // Reverse velocity with energy loss
 
             // Stop bouncing if velocity becomes too small
             if self.v < self.v_min {
@@ -197,7 +201,7 @@ mod tests {
         let mut model = BouncingBall::new();
         model.h = 1.0;
         model.v = 0.0;
-        let initial_energy = model.total_energy();
+        let _initial_energy = model.total_energy();
 
         // Simulate fall and bounce
         model.h = 0.0;

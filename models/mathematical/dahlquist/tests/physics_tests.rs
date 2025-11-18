@@ -6,9 +6,21 @@ use odml_dahlquist::Dahlquist;
 #[test]
 fn test_analytical_solution() {
     // Test analytical solution at various times
-    assert_relative_eq!(Dahlquist::analytical_solution(1.0, 1.0, 0.0), 1.0, epsilon = 1e-10);
-    assert_relative_eq!(Dahlquist::analytical_solution(1.0, 1.0, 1.0), (-1.0f64).exp(), epsilon = 1e-10);
-    assert_relative_eq!(Dahlquist::analytical_solution(1.0, 1.0, 2.0), (-2.0f64).exp(), epsilon = 1e-10);
+    assert_relative_eq!(
+        Dahlquist::analytical_solution(1.0, 1.0, 0.0),
+        1.0,
+        epsilon = 1e-10
+    );
+    assert_relative_eq!(
+        Dahlquist::analytical_solution(1.0, 1.0, 1.0),
+        (-1.0f64).exp(),
+        epsilon = 1e-10
+    );
+    assert_relative_eq!(
+        Dahlquist::analytical_solution(1.0, 1.0, 2.0),
+        (-2.0f64).exp(),
+        epsilon = 1e-10
+    );
 }
 
 #[test]

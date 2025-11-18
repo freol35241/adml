@@ -1,7 +1,7 @@
 //! Physics validation tests for the Van der Pol oscillator
 
 use approx::assert_relative_eq;
-use odml_van_der_pol::{VanDerPol, FmuFunctions};
+use odml_van_der_pol::{FmuFunctions, VanDerPol};
 
 #[test]
 fn test_derivative_equations() {
@@ -33,12 +33,18 @@ fn test_nonlinear_damping_regions() {
     let x0_small = 0.5f64;
     let _x1 = 1.0f64;
     let damping_small = 1.0 - x0_small * x0_small;
-    assert!(damping_small > 0.0, "Damping should be positive for |x0| < 1");
+    assert!(
+        damping_small > 0.0,
+        "Damping should be positive for |x0| < 1"
+    );
 
     // For |x0| > 1, the damping term (1 - x0²) is negative -> energy dissipation
     let x0_large = 2.0;
     let damping_large = 1.0 - x0_large * x0_large;
-    assert!(damping_large < 0.0, "Damping should be negative for |x0| > 1");
+    assert!(
+        damping_large < 0.0,
+        "Damping should be negative for |x0| > 1"
+    );
 }
 
 #[test]
@@ -82,7 +88,11 @@ fn test_different_mu_values() {
 
         // Higher mu should affect the derivative calculation
         // (actual derivative value will depend on the state)
-        assert!(der_x1.is_finite(), "Derivative should be finite for mu = {}", mu);
+        assert!(
+            der_x1.is_finite(),
+            "Derivative should be finite for mu = {}",
+            mu
+        );
     }
 }
 
@@ -110,7 +120,7 @@ fn test_symmetry_properties() {
 fn test_do_step_integration() {
     let mut model = VanDerPol::new();
     model.x0 = 2.0;
-    model.x1 = 1.0;  // Non-zero so x0 will change
+    model.x1 = 1.0; // Non-zero so x0 will change
     model.mu = 1.0;
 
     let initial_x0 = model.x0;
