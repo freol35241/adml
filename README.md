@@ -112,28 +112,55 @@ odml/
 
 ## 🧪 Testing Philosophy
 
-Each model includes three layers of testing:
+Each model includes multiple layers of testing:
 
-1. **Unit Tests** - Test individual functions and logic
-2. **FMI API Tests** - Verify FMI 3.0 compliance
-3. **Physics Tests** - Validate physical correctness:
-   - Energy conservation (where applicable)
-   - Analytical solution comparison
-   - Stability and convergence
-   - Boundary conditions
-   - Event handling
+### 1. Rust Unit & Physics Tests
+
+- **Unit Tests** - Test individual functions and model logic
+- **Physics Tests** - Validate physical correctness:
+  - Energy conservation (where applicable)
+  - Analytical solution comparison
+  - Stability and convergence
+  - Boundary conditions
+  - Event handling
 
 Example test output:
 ```bash
 $ cargo test -p odml-dahlquist
 
-running 8 tests
+running 9 tests
 test tests::test_initial_values ... ok
-test tests::test_derivatives ... ok
+test tests::test_do_step ... ok
 test physics_tests::test_exponential_decay ... ok
 test physics_tests::test_analytical_solution ... ok
 test physics_tests::test_half_life ... ok
-test physics_tests::test_convergence ... ok
+```
+
+### 2. FMU Integration Tests (Python + FMPy)
+
+Once FMUs are built, integration tests validate:
+- ✅ FMU structure and FMI 3.0 compliance
+- ✅ Simulation accuracy with FMPy
+- ✅ Physics validation against analytical solutions
+- ✅ Parameter sensitivity and edge cases
+
+```bash
+# Install Python dependencies
+pip install -r testing/requirements.txt
+
+# Run FMU integration tests
+cd testing/fmu-integration-tests
+pytest -v
+```
+
+See [testing/fmu-integration-tests/README.md](testing/fmu-integration-tests/README.md) for details.
+
+### 3. FMU Compliance Checking
+
+Validate FMI standard compliance using the official FMU Checker:
+
+```bash
+./scripts/check-fmu-compliance.sh fmus/Dahlquist.fmu
 ```
 
 ## 🔄 CI/CD Pipeline
