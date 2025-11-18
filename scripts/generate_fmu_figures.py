@@ -60,15 +60,18 @@ def get_fmu_outputs(fmu_path: Path) -> List[str]:
     return outputs
 
 
-def create_generic_plot(fmu_path: Path, model_name: str, output_dir: Path) -> bool:
+def create_generic_plot(fmu_path: Path, model_name: str, output_dir: Path,
+                       quiet: bool = False) -> bool:
     """Create a generic time-series plot for an FMU without configuration."""
-    print(f"  Using generic plotting (no plot_config.toml found)")
+    if not quiet:
+        print(f"  Using generic plotting (no plot_config.toml found)")
 
     try:
         # Get output variables
         outputs = get_fmu_outputs(fmu_path)
         if not outputs:
-            print(f"  ⚠️  No output variables found in FMU")
+            if not quiet:
+                print(f"  ⚠️  No output variables found in FMU")
             return False
 
         # Simulate with defaults
@@ -101,7 +104,8 @@ def create_generic_plot(fmu_path: Path, model_name: str, output_dir: Path) -> bo
         return True
 
     except Exception as e:
-        print(f"  ✗ Error: {e}")
+        if not quiet:
+            print(f"  ✗ Error: {e}")
         return False
 
 
@@ -192,9 +196,10 @@ def plot_phase_portrait_subplot(ax, result: np.ndarray, config: Dict[str, Any]):
 
 
 def create_configured_plot(fmu_path: Path, model_name: str, config: Dict[str, Any],
-                          output_dir: Path) -> bool:
+                          output_dir: Path, quiet: bool = False) -> bool:
     """Create a plot based on configuration."""
-    print(f"  Using configured plotting from plot_config.toml")
+    if not quiet:
+        print(f"  Using configured plotting from plot_config.toml")
 
     try:
         # Get simulation parameters
@@ -269,27 +274,30 @@ def create_configured_plot(fmu_path: Path, model_name: str, config: Dict[str, An
         return True
 
     except Exception as e:
-        print(f"  ✗ Error: {e}")
-        import traceback
-        traceback.print_exc()
+        if not quiet:
+            print(f"  ✗ Error: {e}")
+            import traceback
+            traceback.print_exc()
         return False
 
 
-def simulate_and_plot_fmu(fmu_path: Path, model_dir: Path, output_dir: Path) -> bool:
+def simulate_and_plot_fmu(fmu_path: Path, model_dir: Path, output_dir: Path,
+                          quiet: bool = False) -> bool:
     """Simulate an FMU and generate its plot."""
     model_name = fmu_path.stem
-    print(f"Processing {model_name}...")
+    if not quiet:
+        print(f"Processing {model_name}...")
 
     # Load configuration if it exists
     config = load_plot_config(model_dir)
 
     # Generate plot
     if config:
-        success = create_configured_plot(fmu_path, model_name, config, output_dir)
+        success = create_configured_plot(fmu_path, model_name, config, output_dir, quiet=quiet)
     else:
-        success = create_generic_plot(fmu_path, model_name, output_dir)
+        success = create_generic_plot(fmu_path, model_name, output_dir, quiet=quiet)
 
-    if success:
+    if success and not quiet:
         print(f"  ✓ Saved: {output_dir / model_name}.png")
 
     return success
@@ -370,15 +378,17 @@ def main():
 
     # Process each FMU
     results = []
+    quiet_mode = args.output_manifest
+
     for fmu_name, model_dir in sorted(models_to_plot.items()):
         fmu_path = fmu_dir / f'{fmu_name}.fmu'
 
         if not fmu_path.exists():
-            if not args.output_manifest:
+            if not quiet_mode:
                 print(f"⚠️  Skipping {fmu_name}: FMU not found at {fmu_path}")
             continue
 
-        success = simulate_and_plot_fmu(fmu_path, model_dir, output_dir)
+        success = simulate_and_plot_fmu(fmu_path, model_dir, output_dir, quiet=quiet_mode)
 
         if success:
             results.append({
@@ -387,7 +397,7 @@ def main():
                 'model_dir': str(model_dir.relative_to(project_root))
             })
 
-        if not args.output_manifest:
+        if not quiet_mode:
             print()
 
     # Output results
