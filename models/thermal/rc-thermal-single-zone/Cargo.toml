@@ -1,0 +1,25 @@
+[package]
+name = "adml-rc-thermal-single-zone"
+version = "1.0.0"
+edition = "2021"
+description = "Single-zone thermal RC model for house heating systems"
+authors = ["AI Agent (Claude Sonnet 4.5) <agent@anthropic.com>"]
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+fmu_from_struct = { workspace = true }
+
+[dev-dependencies]
+physics-framework = { path = "../../../testing/physics-framework" }
+approx = { workspace = true }
+
+# FMI-specific metadata
+[package.metadata.fmi]
+model_name = "RcThermalSingleZone"
+fmi_version = "3.0"
+guid = "ca38accc-d983-4213-9713-d062b2eec6d1"
+description = "1R1C thermal network model for building heating - single thermal zone with thermal resistance and capacitance"

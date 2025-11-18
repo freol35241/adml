@@ -640,6 +640,305 @@ Error: FMU file not found after build
 → Check that directory name matches: model-name → model_name
 ```
 
+## 🔥 Critical Lessons from Recent Implementations
+
+This section contains crucial insights from implementing the thermal RC model that aren't obvious from the templates.
+
+### Lesson 1: FMU Naming Convention is STRICT
+
+**Critical Discovery:** The FMU filename comes from the **struct name**, and CI expects a specific naming convention.
+
+**Directory name:**
+```
+models/thermal/rc-thermal-single-zone/
+```
+
+**MUST have struct name:**
+```rust
+pub struct RcThermalSingleZone {  // ✅ CORRECT
+    // Each hyphen-separated word capitalized: Rc, Thermal, Single, Zone
+}
+
+pub struct RCThermalSingleZone {  // ❌ WRONG - CI expects RcThermalSingleZone.fmu
+pub struct rc_thermal_single_zone {  // ❌ WRONG - Not CamelCase
+```
+
+**How the conversion works:**
+- Directory: `rc-thermal-single-zone`
+- Split on hyphens: `["rc", "thermal", "single", "zone"]`
+- Capitalize each word: `["Rc", "Thermal", "Single", "Zone"]`
+- Join: `RcThermalSingleZone`
+
+The `model_name` field in `Cargo.toml` metadata is for documentation - the actual FMU filename comes from the struct name via the `fmu_from_struct` macro.
+
+**Finding this bug took multiple iterations.** Always verify your struct name matches this pattern!
+
+### Lesson 2: Parameters vs Outputs in plot_config.toml
+
+**Critical Discovery:** Only `#[fmu_from_struct(output)]` variables appear in simulation results. Parameters do NOT.
+
+**Problem Code:**
+```toml
+# plot_config.toml
+[parameters]
+Q_heat = 5000.0  # This is a parameter
+
+[[subplot]]
+variables = ["Q_heat", "Q_loss"]  # ❌ FAILS: Q_heat not in results!
+```
+
+**Error:**
+```
+ValueError: Variable 'Q_heat' not found in simulation results
+```
+
+**Solution:**
+```toml
+[[subplot]]
+variables = ["Q_loss"]  # ✅ Only plot outputs
+reference_line = 5000.0  # ✅ Show parameter as reference line
+reference_label = "Heat Input (5000 W)"
+```
+
+**Why this happens:** FMI distinguishes between:
+- **Parameters** (`causality="parameter"`): Set before simulation, not recorded in results
+- **Outputs** (`causality="output"`): Recorded during simulation
+
+Only outputs appear in the results array, so only outputs can be plotted as variables.
+
+### Lesson 3: Time Units in FMI are ALWAYS Seconds
+
+**Critical Discovery:** FMI standard uses seconds. The plotting script does NOT convert units.
+
+**Problem Code:**
+```toml
+# plot_config.toml
+[simulation]
+stop_time = 200000.0  # This is 200,000 SECONDS (~55 hours)
+
+[[subplot]]
+xlabel = "Time [hours]"  # ❌ WRONG - actual data is in seconds!
+```
+
+**The plot will show:**
+- X-axis labeled "Time [hours]"
+- X-axis values ranging from 0 to 200,000 (which are actually seconds!)
+- User confusion
+
+**Solution:**
+```toml
+[[subplot]]
+xlabel = "Time [s]"  # ✅ CORRECT - matches actual data units
+```
+
+If you want to display hours, you must:
+1. Either convert in your plotting script (not currently implemented), OR
+2. Label correctly and let users understand the units
+
+**Always use FMI standard units:**
+- Time: seconds (s)
+- Length: meters (m)
+- Mass: kilograms (kg)
+- Temperature: Kelvin (K) or Celsius (°C) if clearly documented
+
+### Lesson 4: Physics Notation Requires non_snake_case Allow
+
+**Problem:**
+```rust
+pub struct RcThermalSingleZone {
+    pub R_th: f64,  // Physics notation uses underscores
+    pub C_th: f64,
+}
+```
+
+**Error:**
+```
+warning: structure field `R_th` should have snake_case name
+warning: structure field `C_th` should have snake_case name
+```
+
+**Solution:**
+Add at the top of `src/lib.rs`:
+```rust
+#![allow(non_snake_case)]  // For physics notation like R_th, C_th
+```
+
+**Why this matters:** Physics conventions often use subscripts (rendered as underscores in code). Thermal resistance is R_th (R thermal), thermal capacitance is C_th (C thermal). Using r_th and c_th loses physical meaning.
+
+### Lesson 5: CI Plot Filtering Requires Full Git History
+
+**Critical Discovery:** GitHub Actions checkout is shallow by default, breaking git diff.
+
+**Problem:**
+```yaml
+steps:
+  - uses: actions/checkout@v4  # Shallow clone (only latest commit)
+
+  - name: Generate plots
+    run: |
+      git diff $BASE_SHA...HEAD  # ❌ FAILS: BASE_SHA not in history
+```
+
+**Error:**
+```
+fatal: Invalid symmetric difference expression 8db11989...HEAD
+Error: Process completed with exit code 128
+```
+
+**Solution:**
+```yaml
+steps:
+  - uses: actions/checkout@v4
+    with:
+      fetch-depth: 0  # ✅ Fetch full history for git diff
+```
+
+**Why this matters:** PR-specific plot filtering uses `git diff` to find changed models. Without full history, the base commit from the PR isn't available, causing the diff to fail.
+
+### Lesson 6: Silent Failures in CI Must Be Eliminated
+
+**Problem discovered:** CI was passing even when plots failed to generate.
+
+**Bad pattern:**
+```bash
+python generate_plots.py || echo "[]"  # Suppresses all errors!
+```
+
+**What happened:**
+- Plot generation failed with clear error
+- Error was suppressed by `|| echo "[]"`
+- CI showed green checkmark
+- No plots appeared, no error visible
+
+**Solution principles:**
+1. **ALWAYS print errors to stderr:**
+```python
+except Exception as e:
+    print(f"✗ Error: {e}", file=sys.stderr)  # Never suppress
+    traceback.print_exc(file=sys.stderr)
+    return False
+```
+
+2. **Track failures explicitly:**
+```python
+failed_models = []
+for model in models:
+    if not plot_model(model):
+        failed_models.append((model, reason))
+
+if failed_models:
+    print(f"\n⚠️ {len(failed_models)} models failed:", file=sys.stderr)
+    return 1  # Non-zero exit code
+```
+
+3. **Use continue-on-error with warnings:**
+```yaml
+- name: Generate plots
+  continue-on-error: true  # Don't fail workflow
+  run: |
+    if ! python generate_plots.py; then
+      echo "::warning::Plot generation failed. Check stderr above."
+    fi
+```
+
+**Result:** Errors are visible in CI logs even if workflow continues.
+
+### Lesson 7: plot_config.toml Must Be in Model Directory
+
+**File location:**
+```
+models/thermal/rc-thermal-single-zone/
+├── Cargo.toml
+├── src/
+│   └── lib.rs
+├── tests/
+│   └── physics_tests.rs
+├── plot_config.toml  ← Must be here!
+└── README.md
+```
+
+**NOT here:**
+```
+models/thermal/plot_config.toml  ❌
+fmus/plot_config.toml  ❌
+.github/plot_config.toml  ❌
+```
+
+The plotting script looks for `{model_dir}/plot_config.toml` where `model_dir` is the full path like `models/thermal/rc-thermal-single-zone`.
+
+### Lesson 8: Test Tolerance Must Account for Euler Integration
+
+**Problem:**
+```rust
+#[test]
+fn test_analytical_solution() {
+    // Simulate with Euler integration
+    let result = simulate(dt=0.01, t=100000.0);
+
+    assert_relative_eq!(result, analytical(100000.0), epsilon = 1e-6);  // ❌ FAILS
+}
+```
+
+**Why it fails:** Euler integration is first-order accurate. Errors accumulate over time:
+- Local error: O(dt²)
+- Global error: O(dt)
+- Over many steps, errors grow
+
+**Solution:**
+```rust
+assert_relative_eq!(result, analytical(100000.0), epsilon = 0.01);  // ✅ 1% tolerance
+```
+
+**Guidelines:**
+- Short simulations (t < 10): epsilon = 0.001 (0.1%)
+- Medium simulations (t < 1000): epsilon = 0.01 (1%)
+- Long simulations (t > 1000): epsilon = 0.05-0.25 (5-25%)
+- Very long or stiff systems: Use relative error checking at multiple points
+
+**Better approach for long simulations:**
+```rust
+// Check at multiple intermediate points instead of just the end
+for t in [100.0, 1000.0, 10000.0, 100000.0] {
+    let result = simulate(dt=0.01, t);
+    let expected = analytical(t);
+    assert_relative_eq!(result, expected, epsilon = 0.05);
+}
+```
+
+### Lesson 9: Derived Outputs Should Be Calculated After Integration
+
+**Problem:**
+```rust
+fn do_step(&mut self, _current_time: f64, step_size: f64) {
+    // Calculate derived outputs BEFORE integration
+    self.Q_loss = (self.T_indoor - self.T_ambient) / self.R_th;  // ❌ Uses OLD state
+
+    // Then integrate
+    let der_T = (self.Q_heat - self.Q_loss) / self.C_th;
+    self.T_indoor += der_T * step_size;  // Updates state
+}
+```
+
+**Issue:** `Q_loss` uses the old `T_indoor`, not the updated value.
+
+**Solution:**
+```rust
+fn do_step(&mut self, _current_time: f64, step_size: f64) {
+    // Calculate derivative using current state
+    let q_loss = (self.T_indoor - self.T_ambient) / self.R_th;
+    let der_T = (self.Q_heat - q_loss) / self.C_th;
+
+    // Integrate state
+    self.T_indoor += der_T * step_size;
+
+    // Calculate derived outputs AFTER integration using NEW state
+    self.Q_loss = (self.T_indoor - self.T_ambient) / self.R_th;  // ✅ Uses NEW state
+    self.dT_dt = der_T;
+}
+```
+
+**Why this matters:** Outputs should reflect the state at the END of the time step, not the beginning.
+
 ## 🎯 Success Metrics
 
 A successful AI-generated model:
@@ -649,9 +948,12 @@ A successful AI-generated model:
 4. ✅ Clear documentation
 5. ✅ FMU builds and simulates correctly
 6. ✅ Demonstrates autonomous problem-solving by AI
+7. ✅ Generates correct plots in CI/CD
+8. ✅ Uses proper naming conventions
+9. ✅ No silent failures in CI
 
 **You're contributing to the future of AI-assisted scientific computing!** 🚀
 
 ---
 
-*This guide was written by Claude Sonnet 4.5 based on actual implementation experience with the Dahlquist, Van der Pol, and Bouncing Ball models.*
+*This guide was written by Claude Sonnet 4.5 based on actual implementation experience with the Dahlquist, Van der Pol, Bouncing Ball, and RC Thermal Single-Zone models.*

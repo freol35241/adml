@@ -1,0 +1,43 @@
+# Plot configuration for Single-Zone 1R1C Thermal RC Model
+title = "1R1C Thermal Model - Building Heating Response"
+
+[simulation]
+stop_time = 200000.0  # ~55 hours (2 time constants with default parameters)
+step_size = 10.0      # 10 second steps for smooth curves
+output_interval = 500.0  # Output every 500s to reduce data points
+
+[parameters]
+R_th = 0.01           # Thermal resistance [K/W]
+C_th = 10000000.0     # Thermal capacitance [J/K]
+T_ambient = 0.0       # Ambient temperature [°C]
+Q_heat = 5000.0       # Heating power [W]
+
+# Subplot 1: Indoor temperature vs time
+[[subplot]]
+type = "timeseries"
+title = "Indoor Temperature Response"
+xlabel = "Time [s]"
+ylabel = "Temperature [°C]"
+variables = ["T_indoor"]
+labels = ["Indoor Temperature"]
+colors = ["blue"]
+linewidths = [2.0]
+reference_line = 0.0
+reference_label = "Ambient (0°C)"
+reference_color = "gray"
+reference_style = "--"
+
+# Subplot 2: Heat loss (with constant heat input shown as reference)
+[[subplot]]
+type = "timeseries"
+title = "Energy Balance"
+xlabel = "Time [s]"
+ylabel = "Power [W]"
+variables = ["Q_loss"]
+labels = ["Heat Loss"]
+colors = ["red"]
+linewidths = [2.0]
+reference_line = 5000.0
+reference_label = "Heat Input (5000 W)"
+reference_color = "green"
+reference_style = "-"
