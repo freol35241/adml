@@ -72,7 +72,7 @@ pub use fmu_from_struct::prelude::*;
 /// - `dT_dt`: Rate of temperature change [K/s] (derived)
 #[derive(Fmu, Default, Debug, Clone)]
 #[fmu_from_struct(fmi_version = 3)]
-pub struct RCThermalSingleZone {
+pub struct RcThermalSingleZone {
     // === Parameters (can be set via FMI before simulation) ===
     #[fmu_from_struct(parameter)]
     #[fmu_from_struct(start_value = "0.01")]
@@ -128,7 +128,7 @@ pub struct RCThermalSingleZone {
     pub fmu_info: FmuInfo,
 }
 
-impl FmuFunctions for RCThermalSingleZone {
+impl FmuFunctions for RcThermalSingleZone {
     fn exit_initialization_mode(&mut self) {
         // Calculate initial derived outputs
         self.update_derived_outputs();
@@ -155,8 +155,8 @@ impl FmuFunctions for RCThermalSingleZone {
 }
 
 // === Helper Methods (for testing and validation) ===
-impl RCThermalSingleZone {
-    /// Create a new RCThermalSingleZone model with default parameters
+impl RcThermalSingleZone {
+    /// Create a new RcThermalSingleZone model with default parameters
     pub fn new() -> Self {
         let mut model = Self {
             R_th: 0.01,
@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_initialization() {
-        let model = RCThermalSingleZone::new();
+        let model = RcThermalSingleZone::new();
 
         // Test default parameter values
         assert_eq!(model.R_th, 0.01);
@@ -272,7 +272,7 @@ mod tests {
 
     #[test]
     fn test_time_constant() {
-        let model = RCThermalSingleZone::new();
+        let model = RcThermalSingleZone::new();
         let tau = model.time_constant();
 
         assert_eq!(tau, 0.01 * 10_000_000.0);
@@ -281,7 +281,7 @@ mod tests {
 
     #[test]
     fn test_steady_state_temperature() {
-        let model = RCThermalSingleZone::new();
+        let model = RcThermalSingleZone::new();
         let t_ss = model.steady_state_temperature();
 
         // T_ss = T_ambient + Q_heat * R_th = 0.0 + 5000.0 * 0.01 = 50.0°C
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_steady_state_temperature_with_ambient() {
-        let mut model = RCThermalSingleZone::new();
+        let mut model = RcThermalSingleZone::new();
         model.T_ambient = 10.0;
 
         let t_ss = model.steady_state_temperature();
@@ -301,7 +301,7 @@ mod tests {
 
     #[test]
     fn test_heat_loss_calculation() {
-        let model = RCThermalSingleZone::new();
+        let model = RcThermalSingleZone::new();
 
         // Q_loss = (T_indoor - T_ambient) / R_th
         // Q_loss = (20.0 - 0.0) / 0.01 = 2000.0 W
@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_derivative_calculation() {
-        let model = RCThermalSingleZone::new();
+        let model = RcThermalSingleZone::new();
 
         // dT/dt = Q_heat/C_th - Q_loss/C_th
         // dT/dt = 5000/10e6 - 2000/10e6 = 0.0005 - 0.0002 = 0.0003 K/s
@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn test_one_step() {
-        let mut model = RCThermalSingleZone::new();
+        let mut model = RcThermalSingleZone::new();
 
         let initial_t = model.T_indoor;
         let dt = 1.0; // 1 second
@@ -336,7 +336,7 @@ mod tests {
 
     #[test]
     fn test_no_heating_cools_down() {
-        let mut model = RCThermalSingleZone::new();
+        let mut model = RcThermalSingleZone::new();
         model.Q_heat = 0.0;
         model.T_indoor = 20.0;
         model.T_ambient = 0.0;
@@ -352,7 +352,7 @@ mod tests {
 
     #[test]
     fn test_heating_warms_up() {
-        let mut model = RCThermalSingleZone::new();
+        let mut model = RcThermalSingleZone::new();
         model.Q_heat = 10_000.0; // Strong heating
         model.T_indoor = 0.0;
         model.T_ambient = 0.0;
@@ -368,7 +368,7 @@ mod tests {
 
     #[test]
     fn test_equilibrium_no_change() {
-        let mut model = RCThermalSingleZone::new();
+        let mut model = RcThermalSingleZone::new();
 
         // Set T_indoor to steady-state temperature
         model.T_indoor = model.steady_state_temperature();
@@ -390,7 +390,7 @@ mod tests {
     #[test]
     fn test_analytical_solution_at_t_zero() {
         let t_initial = 20.0;
-        let result = RCThermalSingleZone::analytical_solution(
+        let result = RcThermalSingleZone::analytical_solution(
             0.01,
             10_000_000.0,
             0.0,
@@ -407,7 +407,7 @@ mod tests {
     fn test_analytical_solution_at_infinity() {
         // At very large time, should approach steady state
         let t_very_large = 1_000_000.0; // Much larger than tau=100,000s
-        let result = RCThermalSingleZone::analytical_solution(
+        let result = RcThermalSingleZone::analytical_solution(
             0.01,
             10_000_000.0,
             0.0,
@@ -422,7 +422,7 @@ mod tests {
 
     #[test]
     fn test_stored_energy() {
-        let model = RCThermalSingleZone::new();
+        let model = RcThermalSingleZone::new();
 
         // E = C_th * (T_indoor - T_ambient)
         // E = 10e6 * (20 - 0) = 200,000,000 J
@@ -432,8 +432,8 @@ mod tests {
 
     #[test]
     fn test_parameters_affect_time_constant() {
-        let mut model1 = RCThermalSingleZone::new();
-        let mut model2 = RCThermalSingleZone::new();
+        let mut model1 = RcThermalSingleZone::new();
+        let mut model2 = RcThermalSingleZone::new();
 
         model1.R_th = 0.01;
         model1.C_th = 10_000_000.0;

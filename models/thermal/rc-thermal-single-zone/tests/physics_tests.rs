@@ -1,10 +1,10 @@
-//! Physics validation tests for RCThermalSingleZone
+//! Physics validation tests for RcThermalSingleZone
 //!
 //! These tests verify physical correctness of the thermal RC model by comparing
 //! simulation results against analytical solutions, energy balance, and known
 //! thermal properties.
 
-use adml_rc_thermal_single_zone::{FmuFunctions, RCThermalSingleZone};
+use adml_rc_thermal_single_zone::{FmuFunctions, RcThermalSingleZone};
 use approx::assert_relative_eq;
 
 // === Analytical Solution Tests ===
@@ -12,7 +12,7 @@ use approx::assert_relative_eq;
 #[test]
 fn test_analytical_solution_default_parameters() {
     // Verify simulation matches analytical solution with default parameters
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
 
     // Simulation parameters
     let dt = 0.01; // Small step for Euler accuracy
@@ -25,7 +25,7 @@ fn test_analytical_solution_default_parameters() {
     }
 
     // Compare to analytical solution
-    let expected = RCThermalSingleZone::analytical_solution(
+    let expected = RcThermalSingleZone::analytical_solution(
         model.R_th,
         model.C_th,
         model.T_ambient,
@@ -44,7 +44,7 @@ fn test_analytical_solution_default_parameters() {
 #[test]
 fn test_analytical_solution_heating_from_cold() {
     // Test heating up from cold start (T_indoor < T_steady_state)
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
     model.T_indoor = 0.0; // Start at ambient temperature
     model.T_ambient = 0.0;
     model.Q_heat = 5000.0;
@@ -57,7 +57,7 @@ fn test_analytical_solution_heating_from_cold() {
         model.do_step(0.0, dt);
     }
 
-    let expected = RCThermalSingleZone::analytical_solution(
+    let expected = RcThermalSingleZone::analytical_solution(
         model.R_th, model.C_th, 0.0, 5000.0, 0.0, // Initial at ambient
         t_final,
     );
@@ -68,7 +68,7 @@ fn test_analytical_solution_heating_from_cold() {
 #[test]
 fn test_analytical_solution_cooling_down() {
     // Test cooling down without heating (T_indoor > T_steady_state)
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
     model.T_indoor = 50.0; // Start warm
     model.T_ambient = 0.0;
     model.Q_heat = 0.0; // No heating
@@ -81,7 +81,7 @@ fn test_analytical_solution_cooling_down() {
         model.do_step(0.0, dt);
     }
 
-    let expected = RCThermalSingleZone::analytical_solution(
+    let expected = RcThermalSingleZone::analytical_solution(
         model.R_th, model.C_th, 0.0, 0.0,  // No heating
         50.0, // Initial warm
         t_final,
@@ -93,7 +93,7 @@ fn test_analytical_solution_cooling_down() {
 #[test]
 fn test_analytical_solution_with_warm_ambient() {
     // Test with non-zero ambient temperature
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
     model.T_indoor = 15.0;
     model.T_ambient = 10.0;
     model.Q_heat = 3000.0;
@@ -106,7 +106,7 @@ fn test_analytical_solution_with_warm_ambient() {
         model.do_step(0.0, dt);
     }
 
-    let expected = RCThermalSingleZone::analytical_solution(
+    let expected = RcThermalSingleZone::analytical_solution(
         model.R_th, model.C_th, 10.0, 3000.0, 15.0, t_final,
     );
 
@@ -118,7 +118,7 @@ fn test_analytical_solution_with_warm_ambient() {
 #[test]
 fn test_reaches_steady_state() {
     // Verify system reaches steady state after sufficient time
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
 
     let expected_ss = model.steady_state_temperature();
 
@@ -142,7 +142,7 @@ fn test_reaches_steady_state() {
 #[test]
 fn test_steady_state_energy_balance() {
     // At steady state, heat input should equal heat loss
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
 
     // Set to steady state
     model.T_indoor = model.steady_state_temperature();
@@ -162,7 +162,7 @@ fn test_steady_state_energy_balance() {
 #[test]
 fn test_time_constant_63_percent_response() {
     // After one time constant, system should reach ~63.2% of final value
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
 
     let t_initial = 20.0;
     let t_ss = model.steady_state_temperature(); // 50.0°C with defaults
@@ -188,8 +188,8 @@ fn test_time_constant_63_percent_response() {
 #[test]
 fn test_time_constant_affects_response_speed() {
     // Larger time constant should result in slower fractional response
-    let mut model1 = RCThermalSingleZone::new();
-    let mut model2 = RCThermalSingleZone::new();
+    let mut model1 = RcThermalSingleZone::new();
+    let mut model2 = RcThermalSingleZone::new();
 
     model1.R_th = 0.01;
     model1.C_th = 10_000_000.0;
@@ -229,7 +229,7 @@ fn test_time_constant_affects_response_speed() {
 #[test]
 fn test_energy_balance_heating() {
     // Energy added by heating should equal energy stored + energy lost
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
     model.T_indoor = 20.0;
     model.T_ambient = 0.0;
     model.Q_heat = 5000.0;
@@ -257,7 +257,7 @@ fn test_energy_balance_heating() {
 #[test]
 fn test_no_heating_loses_energy() {
     // Without heating, stored energy should decrease (if above ambient)
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
     model.T_indoor = 30.0;
     model.T_ambient = 0.0;
     model.Q_heat = 0.0; // No heating
@@ -282,7 +282,7 @@ fn test_no_heating_loses_energy() {
 fn test_convergence_with_step_size() {
     // Verify solution converges as step size decreases
     fn simulate_until(dt: f64, t_final: f64) -> f64 {
-        let mut model = RCThermalSingleZone::new();
+        let mut model = RcThermalSingleZone::new();
         model.T_indoor = 20.0;
 
         let steps = (t_final / dt) as usize;
@@ -299,7 +299,7 @@ fn test_convergence_with_step_size() {
 
     // Get reference from analytical solution
     let reference =
-        RCThermalSingleZone::analytical_solution(0.01, 10_000_000.0, 0.0, 5000.0, 20.0, t_final);
+        RcThermalSingleZone::analytical_solution(0.01, 10_000_000.0, 0.0, 5000.0, 20.0, t_final);
 
     // Error should decrease with step size
     let error_coarse = (result_coarse - reference).abs();
@@ -321,10 +321,10 @@ fn test_convergence_with_step_size() {
 #[test]
 fn test_insulation_quality_affects_steady_state() {
     // Better insulation (higher R_th) should result in higher steady-state temperature
-    let mut model_poor_insulation = RCThermalSingleZone::new();
+    let mut model_poor_insulation = RcThermalSingleZone::new();
     model_poor_insulation.R_th = 0.005; // Poor insulation
 
-    let mut model_good_insulation = RCThermalSingleZone::new();
+    let mut model_good_insulation = RcThermalSingleZone::new();
     model_good_insulation.R_th = 0.02; // Good insulation
 
     // Same heating power
@@ -343,11 +343,11 @@ fn test_insulation_quality_affects_steady_state() {
 #[test]
 fn test_thermal_mass_affects_time_constant() {
     // Larger thermal mass should result in slower response
-    let mut model_low_mass = RCThermalSingleZone::new();
+    let mut model_low_mass = RcThermalSingleZone::new();
     model_low_mass.R_th = 0.01;
     model_low_mass.C_th = 5_000_000.0;
 
-    let mut model_high_mass = RCThermalSingleZone::new();
+    let mut model_high_mass = RcThermalSingleZone::new();
     model_high_mass.R_th = 0.01;
     model_high_mass.C_th = 20_000_000.0;
 
@@ -370,7 +370,7 @@ fn test_thermal_mass_affects_time_constant() {
 #[test]
 fn test_zero_heating() {
     // With zero heating, temperature should approach ambient
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
     model.T_indoor = 30.0;
     model.T_ambient = 10.0;
     model.Q_heat = 0.0;
@@ -391,7 +391,7 @@ fn test_zero_heating() {
 #[test]
 fn test_massive_heating() {
     // Very large heating power should result in high temperature
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
     model.T_indoor = 20.0;
     model.Q_heat = 50_000.0; // 50 kW - massive heating
 
@@ -416,7 +416,7 @@ fn test_massive_heating() {
 #[test]
 fn test_negative_ambient_temperature() {
     // System should work correctly with negative ambient temperature (winter)
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
     model.T_indoor = 20.0;
     model.T_ambient = -20.0; // Cold winter day
     model.Q_heat = 10_000.0; // Need more heating in winter
@@ -437,7 +437,7 @@ fn test_negative_ambient_temperature() {
 #[test]
 fn test_indoor_equals_ambient_no_heating() {
     // When indoor equals ambient with no heating, should stay constant
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
     model.T_indoor = 15.0;
     model.T_ambient = 15.0;
     model.Q_heat = 0.0;
@@ -457,7 +457,7 @@ fn test_indoor_equals_ambient_no_heating() {
 #[test]
 fn test_very_small_step() {
     // Verify model works with very small time steps
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
 
     model.do_step(0.0, 1e-6);
 
@@ -467,7 +467,7 @@ fn test_very_small_step() {
 #[test]
 fn test_stability_over_long_simulation() {
     // Model should remain stable over very long simulation times
-    let mut model = RCThermalSingleZone::new();
+    let mut model = RcThermalSingleZone::new();
 
     let dt = 0.1;
     // Simulate for 100 time constants
@@ -489,8 +489,8 @@ fn test_stability_over_long_simulation() {
 #[test]
 fn test_different_initial_conditions_converge() {
     // Different initial conditions should converge to same steady state
-    let mut model1 = RCThermalSingleZone::new();
-    let mut model2 = RCThermalSingleZone::new();
+    let mut model1 = RcThermalSingleZone::new();
+    let mut model2 = RcThermalSingleZone::new();
 
     model1.T_indoor = 0.0; // Start cold
     model2.T_indoor = 100.0; // Start hot
