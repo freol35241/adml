@@ -4,7 +4,6 @@ resolver = "2"
 members = [
     "models/mathematical/*",
     "models/mechanical/*",
-    "testing/fmi-compliance",
     "testing/physics-framework",
 ]
 

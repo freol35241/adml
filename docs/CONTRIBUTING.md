@@ -86,7 +86,6 @@ fmi = { workspace = true }
 # Add other dependencies as needed
 
 [dev-dependencies]
-fmi-compliance = { path = "../../../testing/fmi-compliance" }
 physics-framework = { path = "../../../testing/physics-framework" }
 approx = { workspace = true }
 

@@ -4,220 +4,155 @@ on:
   workflow_dispatch:
     inputs:
       release_name:
-        description: 'Release name (e.g., "2025-11-17" or "Monthly Release")'
+        description: 'Release name (e.g., "v1.0.0")'
         required: true
         default: ''
   push:
     tags:
-      - 'release-*'
+      - 'v*'
 
 env:
   RUST_BACKTRACE: 1
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Discover all models in the repository
-  discover-models:
+  # Build FMUs for all models
+  build-fmus:
     runs-on: ubuntu-latest
-    outputs:
-      models: ${{ steps.find-models.outputs.models }}
-      model-count: ${{ steps.find-models.outputs.count }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Find all models
-        id: find-models
-        run: |
-          models=$(find models -mindepth 2 -maxdepth 2 -type d -name '[!.]*' | jq -R -s -c 'split("\n")[:-1] | map(select(length > 0))')
-          count=$(echo "$models" | jq 'length')
-
-          echo "Found $count models:"
-          echo "$models" | jq -r '.[]'
-
-          echo "models=$models" >> $GITHUB_OUTPUT
-          echo "count=$count" >> $GITHUB_OUTPUT
-
-  # Build binaries for all platforms
-  build-binaries:
-    needs: discover-models
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        model: ${{ fromJson(needs.discover-models.outputs.models) }}
-        target:
-          - x86_64-unknown-linux-gnu
-          - x86_64-pc-windows-gnu
-          - aarch64-unknown-linux-gnu
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
 
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Cache cargo
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ matrix.target }}-${{ matrix.model }}-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Extract model metadata
-        id: metadata
-        working-directory: ${{ matrix.model }}
+      - name: Install FMU packaging tool
         run: |
-          MODEL_NAME=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].metadata.fmi.model_name // .packages[0].name')
-          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-          CRATE_NAME=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')
+          cargo install package_fmu_after_build
 
-          echo "model_name=$MODEL_NAME" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "crate_name=$CRATE_NAME" >> $GITHUB_OUTPUT
-          echo "Building $MODEL_NAME v$VERSION for ${{ matrix.target }}"
-
-      - name: Build with cross
+      - name: Build all FMUs
         run: |
-          cross build --release --target ${{ matrix.target }} --manifest-path ${{ matrix.model }}/Cargo.toml
+          ./scripts/build-all-fmus.sh
 
-      - name: Determine library name and extension
-        id: lib-info
+      - name: List built FMUs
         run: |
-          case "${{ matrix.target }}" in
-            *windows*)
-              EXT="dll"
-              PREFIX=""
-              ;;
-            *darwin*)
-              EXT="dylib"
-              PREFIX="lib"
-              ;;
-            *)
-              EXT="so"
-              PREFIX="lib"
-              ;;
-          esac
+          echo "Built FMUs:"
+          ls -lh fmus/*.fmu
 
-          CRATE_NAME_UNDERSCORE=$(echo "${{ steps.metadata.outputs.crate_name }}" | tr '-' '_')
-          LIB_NAME="${PREFIX}${CRATE_NAME_UNDERSCORE}.${EXT}"
-
-          echo "lib_name=$LIB_NAME" >> $GITHUB_OUTPUT
-          echo "ext=$EXT" >> $GITHUB_OUTPUT
-
-      - name: Upload binary artifact
+      - name: Upload FMU artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: binary-${{ steps.metadata.outputs.model_name }}-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/${{ steps.lib-info.outputs.lib_name }}
-          retention-days: 7
+          name: fmus
+          path: fmus/*.fmu
 
-  # Create GitHub release with all binaries
+  # Create GitHub release with all FMUs
   create-release:
-    needs: [discover-models, build-binaries]
+    needs: build-fmus
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all binary artifacts
+      - name: Download FMU artifacts
         uses: actions/download-artifact@v3
         with:
-          path: binaries/
+          name: fmus
+          path: fmus/
 
-      - name: List downloaded binaries
+      - name: List downloaded FMUs
         run: |
-          echo "📦 Downloaded binaries:"
-          find binaries/ -type f -exec ls -lh {} \;
+          echo "📦 FMU files for release:"
+          ls -lh fmus/*.fmu
 
-      - name: Determine release name
-        id: release-name
+      - name: Determine release details
+        id: release-details
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            RELEASE_NAME="${{ github.event.inputs.release_name }}"
+          if [ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]; then
+            RELEASE_NAME="$RELEASE_INPUT_NAME"
+            TAG="$RELEASE_INPUT_NAME"
           else
-            RELEASE_NAME="${GITHUB_REF#refs/tags/release-}"
+            TAG="${GITHUB_REF#refs/tags/}"
+            RELEASE_NAME="$TAG"
           fi
 
           if [ -z "$RELEASE_NAME" ]; then
             RELEASE_NAME="release-$(date +%Y-%m-%d)"
+            TAG="release-$(date +%Y%m%d-%H%M%S)"
           fi
-
-          TAG="release-$(date +%Y%m%d-%H%M%S)"
 
           echo "name=$RELEASE_NAME" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "Release: $RELEASE_NAME (tag: $TAG)"
+        env:
+          RELEASE_INPUT_NAME: ${{ github.event.inputs.release_name }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
 
       - name: Generate release notes
         run: |
           cat > release-notes.md << 'EOF'
           # ODML - Open Dynamical Model Library
 
-          Pre-built binaries for FMI 3.0 compatible dynamical models.
+          FMI 3.0 compatible FMU files ready to use in any FMI-supporting simulation tool.
 
           ## 📦 Models in this Release
 
-          This release includes the following models:
-
           EOF
 
-          # List all models
-          find models -mindepth 2 -maxdepth 2 -type d -name '[!.]*' | while read model_dir; do
-            model_name=$(basename "$model_dir")
-            if [ -f "$model_dir/README.md" ]; then
-              description=$(head -n 3 "$model_dir/README.md" | tail -n 1)
-              echo "- **$model_name**: $description" >> release-notes.md
-            else
-              echo "- **$model_name**" >> release-notes.md
-            fi
+          # List models with descriptions
+          for fmu in fmus/*.fmu; do
+            model_name=$(basename "$fmu" .fmu)
+            echo "- **$model_name.fmu** - FMI 3.0 Co-Simulation model" >> release-notes.md
           done
 
           cat >> release-notes.md << 'EOF'
 
-          ## 🏗️ Built For
+          ## 🚀 How to Use
 
-          - **Linux x86_64** (.so files)
-          - **Windows x86_64** (.dll files)
-          - **Linux ARM64** (.so files)
+          1. Download the FMU file for your desired model
+          2. Load it in any FMI 3.0 compatible tool:
+             - FMPy (Python)
+             - Dymola
+             - Simulink with FMI Toolbox
+             - OpenModelica
+             - And many more...
 
-          ## 📝 Note on FMU Packaging
+          ## ✅ Testing
 
-          These are raw binaries compatible with FMI 3.0. To use them as FMUs:
-          1. Download the appropriate binary for your platform
-          2. Package it with a modelDescription.xml file
-          3. Place in the correct directory structure according to FMI 3.0 spec
+          All FMUs are thoroughly tested with:
+          - **Tier 1**: Rust unit & physics tests
+          - **Tier 2**: FMU integration tests with FMPy
+          - **Tier 3**: FMI 3.0 compliance verification
 
-          Full FMU packaging will be available in future releases.
+          ## 📝 Models Included
 
-          ## 🧪 Testing
-
-          All models include comprehensive test suites:
-          - Unit tests for code correctness
-          - FMI API compliance tests
-          - Physics validation tests
+          - **Dahlquist** - Simple ODE test equation: dx/dt = -k·x
+          - **Van der Pol** - Nonlinear oscillator with limit cycle
+          - **Bouncing Ball** - Ball with gravity and elastic collisions
 
           ## 📚 Documentation
 
-          For detailed documentation on each model, see the [repository](https://github.com/${{ github.repository }}).
+          For detailed documentation, visit the [repository](https://github.com/$GITHUB_REPOSITORY).
+
+          ## 🛠️ Technical Details
+
+          - **FMI Version**: 3.0
+          - **Mode**: Co-Simulation
+          - **Platform**: Linux x86_64
+          - **Built with**: Rust + fmu_from_struct
+
           EOF
 
           cat release-notes.md
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: ${{ steps.release-name.outputs.name }}
-          tag_name: ${{ steps.release-name.outputs.tag }}
+          name: ${{ steps.release-details.outputs.name }}
+          tag_name: ${{ steps.release-details.outputs.tag }}
           body_path: release-notes.md
-          files: binaries/**/*
+          files: fmus/*.fmu
           draft: false
           prerelease: false
         env:
@@ -227,9 +162,10 @@ jobs:
         run: |
           echo "## 🎉 Release Created!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Release:** ${{ steps.release-name.outputs.name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** ${{ steps.release-name.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Models:** ${{ needs.discover-models.outputs.model-count }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Release:** ${{ steps.release-details.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ steps.release-details.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Binary Count" >> $GITHUB_STEP_SUMMARY
-          find binaries/ -type f | wc -l >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 FMU Files" >> $GITHUB_STEP_SUMMARY
+          ls fmus/*.fmu | while read fmu; do
+            echo "- $(basename $fmu)" >> $GITHUB_STEP_SUMMARY
+          done

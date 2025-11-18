@@ -14,7 +14,6 @@ crate-type = ["cdylib", "rlib"]
 fmu_from_struct = { workspace = true }
 
 [dev-dependencies]
-fmi-compliance = { path = "../../../testing/fmi-compliance" }
 physics-framework = { path = "../../../testing/physics-framework" }
 approx = { workspace = true }
 

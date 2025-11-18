@@ -115,7 +115,6 @@ odml/
 │       └── bouncing-ball/     # Bouncing ball with collisions
 │
 ├── testing/                   # Shared testing infrastructure
-│   ├── fmi-compliance/       # FMI API compliance tests
 │   └── physics-framework/    # Physics validation utilities
 │
 ├── .github/workflows/         # CI/CD pipelines
@@ -235,7 +234,6 @@ Each model has independent versioning!
    fmu_from_struct = { workspace = true }
 
    [dev-dependencies]
-   fmi-compliance = { path = "../../../testing/fmi-compliance" }
    physics-framework = { path = "../../../testing/physics-framework" }
    approx = { workspace = true }
 

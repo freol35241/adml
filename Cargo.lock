@@ -30,13 +30,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
-name = "fmi-compliance"
-version = "0.1.0"
-dependencies = [
- "approx",
-]
-
-[[package]]
 name = "fmu_from_struct"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -99,7 +92,6 @@ name = "odml-bouncing-ball"
 version = "1.0.0"
 dependencies = [
  "approx",
- "fmi-compliance",
  "fmu_from_struct",
  "physics-framework",
 ]
@@ -109,7 +101,6 @@ name = "odml-dahlquist"
 version = "1.0.0"
 dependencies = [
  "approx",
- "fmi-compliance",
  "fmu_from_struct",
  "physics-framework",
 ]
@@ -119,7 +110,6 @@ name = "odml-van-der-pol"
 version = "1.0.0"
 dependencies = [
  "approx",
- "fmi-compliance",
  "fmu_from_struct",
  "physics-framework",
 ]

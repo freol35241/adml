@@ -23,16 +23,26 @@ jobs:
       test-all: ${{ steps.check.outputs.test-all }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Need at least 2 commits for diff
 
       - name: Check if should test all models
         id: check
         run: |
           # Test all models on main branch or if core files changed
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || \
-             git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E "(Cargo.toml|testing/|\.github/)"; then
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             echo "test-all=true" >> $GITHUB_OUTPUT
+            echo "Testing all models (main branch)"
+            exit 0
+          fi
+
+          # For PRs and other branches, check for core file changes
+          if git diff --name-only HEAD~1 HEAD | grep -E "(Cargo.toml|testing/|scripts/|\.github/)"; then
+            echo "test-all=true" >> $GITHUB_OUTPUT
+            echo "Testing all models (core files changed)"
           else
             echo "test-all=false" >> $GITHUB_OUTPUT
+            echo "Testing only changed models"
           fi
 
       - name: Find changed models
@@ -43,7 +53,7 @@ jobs:
             models=$(find models -mindepth 2 -maxdepth 2 -type d -name '[!.]*' | jq -R -s -c 'split("\n")[:-1] | map(select(length > 0))')
           else
             # Find only changed models
-            changed_files=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+            changed_files=$(git diff --name-only HEAD~1 HEAD)
             models=$(echo "$changed_files" | grep "^models/" | cut -d/ -f1-3 | sort -u | jq -R -s -c 'split("\n")[:-1] | map(select(length > 0))')
           fi
 
@@ -128,6 +138,69 @@ jobs:
           echo "## ✅ ${{ steps.info.outputs.name }}" >> $GITHUB_STEP_SUMMARY
           echo "All tests passed for ${{ matrix.model }}" >> $GITHUB_STEP_SUMMARY
 
+  # Build and test FMUs
+  fmu-integration:
+    needs: [workspace-check, test-models]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r testing/requirements.txt
+
+      - name: Install FMU packaging tool
+        run: |
+          cargo install package_fmu_after_build
+
+      - name: Cache cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-fmu-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build all FMUs
+        run: |
+          ./scripts/build-all-fmus.sh
+
+      - name: List built FMUs
+        run: |
+          echo "Built FMUs:"
+          ls -lh fmus/*.fmu
+
+      - name: Run FMU integration tests
+        working-directory: testing/fmu-integration-tests
+        run: |
+          python -m pytest -v --tb=short
+
+      - name: Upload FMU artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: fmus
+          path: fmus/*.fmu
+          retention-days: 7
+
+      - name: Summary
+        run: |
+          echo "## ✅ FMU Integration Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All FMUs built and tested successfully:" >> $GITHUB_STEP_SUMMARY
+          ls fmus/*.fmu | while read fmu; do
+            echo "- \`$(basename $fmu)\`" >> $GITHUB_STEP_SUMMARY
+          done
+
   # Documentation build
   docs:
     runs-on: ubuntu-latest
@@ -162,7 +235,7 @@ jobs:
 
   # Final status check
   ci-success:
-    needs: [workspace-check, test-models, docs]
+    needs: [workspace-check, test-models, fmu-integration, docs]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -170,6 +243,7 @@ jobs:
         run: |
           if [[ "${{ needs.workspace-check.result }}" != "success" ]] || \
              [[ "${{ needs.test-models.result }}" != "success" && "${{ needs.test-models.result }}" != "skipped" ]] || \
+             [[ "${{ needs.fmu-integration.result }}" != "success" ]] || \
              [[ "${{ needs.docs.result }}" != "success" ]]; then
             echo "CI failed"
             exit 1
