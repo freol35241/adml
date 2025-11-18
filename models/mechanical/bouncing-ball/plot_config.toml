@@ -1,0 +1,34 @@
+# Plot configuration for Bouncing Ball
+# See docs/plot_config_spec.md for full documentation
+
+title = "Bouncing Ball with Elastic Collisions (e=0.7)"
+
+[simulation]
+stop_time = 5.0
+step_size = 0.001
+output_interval = 0.01
+
+[parameters]
+g = -9.81
+e = 0.7
+
+[[subplot]]
+type = "timeseries"
+title = "Height"
+xlabel = "Time [s]"
+ylabel = "Height h [m]"
+variables = ["h"]
+colors = ["blue"]
+linewidths = [1.5]
+reference_line = 0.0
+reference_label = "Ground"
+
+[[subplot]]
+type = "timeseries"
+title = "Velocity"
+xlabel = "Time [s]"
+ylabel = "Velocity v [m/s]"
+variables = ["v"]
+colors = ["red"]
+linewidths = [1.5]
+reference_line = 0.0

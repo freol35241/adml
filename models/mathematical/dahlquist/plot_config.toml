@@ -1,0 +1,19 @@
+# Plot configuration for Dahlquist test equation
+# See docs/plot_config_spec.md for full documentation
+
+title = "Dahlquist Test Equation: dx/dt = -kx"
+
+[simulation]
+stop_time = 5.0
+
+[parameters]
+k = 1.0
+
+[[subplot]]
+type = "timeseries"
+title = "Exponential Decay"
+xlabel = "Time [s]"
+ylabel = "State x"
+variables = ["x"]
+colors = ["blue"]
+linewidths = [2.0]
