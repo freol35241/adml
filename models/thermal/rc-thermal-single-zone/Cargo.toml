@@ -19,7 +19,7 @@ approx = { workspace = true }
 
 # FMI-specific metadata
 [package.metadata.fmi]
-model_name = "RCThermalSingleZone"
+model_name = "RcThermalSingleZone"
 fmi_version = "3.0"
 guid = "ca38accc-d983-4213-9713-d062b2eec6d1"
 description = "1R1C thermal network model for building heating - single thermal zone with thermal resistance and capacitance"

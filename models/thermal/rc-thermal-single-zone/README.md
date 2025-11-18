@@ -122,7 +122,7 @@ All parameters (`R_th`, `C_th`, `T_ambient`, `Q_heat`) can be set before simulat
 ./scripts/build-fmu.sh models/thermal/rc-thermal-single-zone
 ```
 
-The FMU file will be created at: `fmus/RCThermalSingleZone.fmu`
+The FMU file will be created at: `fmus/RcThermalSingleZone.fmu`
 
 ### Example Simulation (Python with FMPy)
 
@@ -132,7 +132,7 @@ import matplotlib.pyplot as plt
 
 # Simulate heating from cold start
 result = fmpy.simulate_fmu(
-    'fmus/RCThermalSingleZone.fmu',
+    'fmus/RcThermalSingleZone.fmu',
     stop_time=200000,  # ~55 hours (2 time constants)
     step_size=10.0,     # 10 second steps
     output_interval=1000.0,  # Output every 1000s
@@ -178,7 +178,7 @@ import matplotlib.pyplot as plt
 
 # Simulate with poor insulation
 result_poor = fmpy.simulate_fmu(
-    'fmus/RCThermalSingleZone.fmu',
+    'fmus/RcThermalSingleZone.fmu',
     stop_time=300000,
     step_size=10.0,
     output_interval=1000.0,
@@ -187,7 +187,7 @@ result_poor = fmpy.simulate_fmu(
 
 # Simulate with good insulation
 result_good = fmpy.simulate_fmu(
-    'fmus/RCThermalSingleZone.fmu',
+    'fmus/RcThermalSingleZone.fmu',
     stop_time=300000,
     step_size=10.0,
     output_interval=1000.0,
