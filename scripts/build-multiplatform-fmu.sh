@@ -46,9 +46,9 @@ if [ ! -f "modelDescription.xml" ]; then
 fi
 cp modelDescription.xml modelDescription.xml.tmp
 
-# Step 2: Build for Windows x86_64 using cross-compilation
-echo "Step 2: Building for Windows x86_64..."
-cargo build -p "$PACKAGE_NAME" --release --target x86_64-pc-windows-gnu
+# Step 2: Build for Windows x86_64 using cross
+echo "Step 2: Building for Windows x86_64 using cross..."
+cross build -p "$PACKAGE_NAME" --release --target x86_64-pc-windows-gnu
 
 # Step 3: Read model information from modelDescription.xml
 MODEL_NAME=$(grep -oP 'modelName="\K[^"]+' modelDescription.xml.tmp)
