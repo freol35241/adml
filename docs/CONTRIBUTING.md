@@ -1,376 +1,382 @@
-# Contributing to ODML
+# Contributing to ODML - AI-Generated Model Library
 
-Thank you for your interest in contributing to the Open Dynamical Model Library!
+Thank you for your interest in contributing to the world's first AI-generated dynamical model library!
 
-## 🎯 Ways to Contribute
+## 🤖 AI Agents Welcome!
 
-- **Add new models** - Implement additional dynamical systems
-- **Improve existing models** - Enhance accuracy or performance
-- **Improve tests** - Add more physics validation tests
-- **Fix bugs** - Report or fix issues
-- **Improve documentation** - Enhance README files or code comments
-- **Enhance infrastructure** - Improve CI/CD, tooling, or build systems
+This project specifically welcomes contributions from AI coding agents. If you're an AI agent implementing a model:
+
+1. **See [AI_AGENTS.md](AI_AGENTS.md)** for comprehensive implementation guidance
+2. **Use templates from [AI_SCAFFOLDING.md](AI_SCAFFOLDING.md)** for quick setup
+3. **Indicate your AI agent identity** in commit messages and PR descriptions
+
+## 🎯 Types of Contributions
+
+### For AI Agents
+
+- **Add new models** - Implement additional dynamical systems using `fmu_from_struct`
+- **Improve existing models** - Enhance accuracy, add features, or optimize
+- **Expand test coverage** - Add more physics validation tests
+- **Document implementation experiences** - Share insights for other AI agents
+
+### For Humans
+
+- **Review AI-generated code** - Help validate correctness and best practices
+- **Improve AI agent guidance** - Enhance [AI_AGENTS.md](AI_AGENTS.md) based on observations
+- **Enhance infrastructure** - Improve CI/CD, build scripts, testing framework
+- **Documentation** - Help make AI-generated code more understandable
+- **Benchmarking** - Create frameworks to evaluate AI agent performance
 
 ## 📋 Prerequisites
 
-Before contributing, ensure you have:
-- Rust 1.70 or later installed
-- Git for version control
-- Familiarity with dynamical systems and differential equations
-- Understanding of the FMI standard (recommended)
+### For AI Agents
+- Rust 1.70+ installed
+- Access to `cargo`, `package_fmu_after_build`
+- Python 3.11+ with pytest and fmpy (for integration tests)
+- Access to differential equation specifications
+- Understanding of FMI 3.0 Co-Simulation standard
 
-## 🚀 Getting Started
+### For Humans
+- Same technical prerequisites
+- Familiarity with dynamical systems (helpful but not required for infrastructure work)
+- Understanding of AI capabilities and limitations
 
-1. **Fork the repository**
-   ```bash
-   # Fork on GitHub, then clone your fork
-   git clone https://github.com/YOUR_USERNAME/odml.git
-   cd odml
-   ```
+## 🚀 Quick Start for AI Agents
 
-2. **Create a branch**
-   ```bash
-   git checkout -b feature/your-model-name
-   ```
+See [AI_AGENTS.md](AI_AGENTS.md) for the complete guide. Quick summary:
 
-3. **Make your changes**
-   - Follow the guidelines below
-   - Test thoroughly
+1. **Read the specification** for your model (differential equations, parameters, validation criteria)
+2. **Use scaffolding templates** from [AI_SCAFFOLDING.md](AI_SCAFFOLDING.md)
+3. **Implement using `fmu_from_struct`** - No manual FFI code!
+4. **Write physics tests** - Compare to analytical solutions or known properties
+5. **Build and test FMU** - Run all three test tiers
+6. **Submit PR** - Include AI agent identifier
 
-4. **Submit a pull request**
-   - Describe your changes
-   - Reference any related issues
+## 🏗️ Implementation Approach: `fmu_from_struct`
 
-## 🏗️ Adding a New Model
+**Important:** This project uses the [`fmu_from_struct`](https://github.com/jarlekramer/fmu_from_struct) derive macro for FMI bindings.
 
-### 1. Choose the Right Category
+### Why `fmu_from_struct`?
 
-Place your model in the appropriate category:
-- `models/mathematical/` - Mathematical test equations, benchmark problems
-- `models/mechanical/` - Mechanical systems (rigid body dynamics, kinematics)
-- `models/electrical/` - Electrical circuits and systems
-- `models/thermal/` - Heat transfer and thermodynamics
-- `models/hydraulic/` - Fluid dynamics and hydraulic systems
+1. **Eliminates manual FFI code** - Automatically generates FMI C bindings
+2. **Reduces implementation errors** - No manual pointer arithmetic or type conversions
+3. **More reliable for AI agents** - Declarative approach via derive macros
+4. **Cleaner code** - Focus on physics, not boilerplate
 
-Create a new category if needed.
-
-### 2. Directory Structure
-
-```
-models/category/model-name/
-├── Cargo.toml
-├── src/
-│   └── lib.rs
-├── tests/
-│   └── physics_tests.rs
-└── README.md
-```
-
-### 3. Cargo.toml Template
-
-```toml
-[package]
-name = "odml-model-name"
-version = "1.0.0"
-edition = "2021"
-description = "Brief description of your model"
-authors = ["Your Name <your.email@example.com>"]
-license.workspace = true
-repository.workspace = true
-
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[dependencies]
-fmi = { workspace = true }
-# Add other dependencies as needed
-
-[dev-dependencies]
-physics-framework = { path = "../../../testing/physics-framework" }
-approx = { workspace = true }
-
-[package.metadata.fmi]
-model_name = "YourModelName"
-fmi_version = "3.0"
-guid = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Generate a unique GUID
-description = "Detailed model description"
-```
-
-Generate a GUID online or use: `uuidgen` (Linux/Mac) or `[guid]::NewGuid()` (PowerShell)
-
-### 4. Model Implementation
-
-Your `src/lib.rs` should include:
+### Basic Structure
 
 ```rust
-//! Model Name
-//!
-//! Detailed description of the model, including:
-//! - Physical system being modeled
-//! - Differential equations
-//! - Assumptions and limitations
+use fmu_from_struct::prelude::*;
 
-use std::ffi::c_void;
+#[derive(Fmu, Default, Debug, Clone)]
+#[fmu_from_struct(fmi_version = 3)]
+pub struct MyModel {
+    #[fmu_from_struct(parameter)]
+    #[fmu_from_struct(start_value = "1.0")]
+    pub k: f64,
 
-/// Model state structure
-#[repr(C)]
-pub struct YourModel {
-    // State variables
-    pub state1: f64,
-    pub state2: f64,
-    // Parameters
-    pub param1: f64,
-    // Time
-    pub time: f64,
+    #[fmu_from_struct(output)]
+    #[fmu_from_struct(start_value = "1.0")]
+    pub x: f64,
 }
 
-impl YourModel {
-    pub fn new() -> Self {
-        Self {
-            // Default initial conditions
-            state1: 0.0,
-            state2: 0.0,
-            param1: 1.0,
-            time: 0.0,
-        }
-    }
-
-    pub fn get_number_of_continuous_states(&self) -> usize {
-        2 // Number of differential states
-    }
-
-    pub fn get_continuous_states(&self) -> Vec<f64> {
-        vec![self.state1, self.state2]
-    }
-
-    pub fn set_continuous_states(&mut self, states: &[f64]) {
-        if states.len() >= 2 {
-            self.state1 = states[0];
-            self.state2 = states[1];
-        }
-    }
-
-    pub fn get_derivatives(&self) -> Vec<f64> {
-        // Implement your differential equations here
-        let der_state1 = /* ... */;
-        let der_state2 = /* ... */;
-        vec![der_state1, der_state2]
-    }
-
-    pub fn do_step(&mut self, dt: f64) {
-        // Simple Euler integration
-        let derivatives = self.get_derivatives();
-        self.state1 += derivatives[0] * dt;
-        self.state2 += derivatives[1] * dt;
-        self.time += dt;
-    }
-}
-
-// Include unit tests
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_initial_values() {
-        // Test default initialization
-    }
-
-    #[test]
-    fn test_derivatives() {
-        // Test derivative calculations
-    }
-
-    #[test]
-    fn test_state_operations() {
-        // Test get/set state operations
+impl FmuFunctions for MyModel {
+    fn do_step(&mut self, _current_time: f64, step_size: f64) {
+        let der_x = -self.k * self.x;
+        self.x += der_x * step_size;
     }
 }
 ```
 
-### 5. Physics Validation Tests
-
-Create `tests/physics_tests.rs`:
-
-```rust
-use odml_your_model::YourModel;
-use physics_framework::assertions::*;
-use approx::assert_relative_eq;
-
-#[test]
-fn test_physical_property_1() {
-    let mut model = YourModel::new();
-
-    // Set up test conditions
-
-    // Run simulation
-    let dt = 0.001;
-    for _ in 0..1000 {
-        model.do_step(dt);
-    }
-
-    // Verify physical properties
-    // e.g., energy conservation, steady state, analytical solution
-}
-
-#[test]
-fn test_convergence() {
-    // Test that solution converges with smaller step sizes
-}
-
-#[test]
-fn test_boundary_conditions() {
-    // Test behavior at boundaries
-}
-```
-
-### 6. Documentation
-
-Create a comprehensive `README.md`:
-
-```markdown
-# Your Model Name
-
-Brief description of the model.
-
-## Model Description
-
-Detailed description including:
-- Physical system
-- Mathematical equations (use LaTeX/math notation if needed)
-- Assumptions
-
-## Parameters
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| param1 | Real | 1.0 | Description |
-
-## State Variables
-
-| Name | Type | Initial | Description |
-|------|------|---------|-------------|
-| state1 | Real | 0.0 | Description |
-
-## Usage
-
-Examples of how to use the model.
-
-## Physics Validation
-
-Describe what physics properties are tested and why.
-
-## References
-
-Cite any papers, books, or resources used.
-```
+**That's it!** No FFI code required.
 
 ## ✅ Code Quality Standards
 
-### Formatting
+All contributions must meet these standards:
 
-- Run `cargo fmt` before committing
-- Use standard Rust formatting conventions
+### Rust Code Quality
 
-### Linting
+```bash
+# Format code
+cargo fmt --all
 
-- Code must pass `cargo clippy -- -D warnings`
-- Fix all warnings
+# Check for warnings
+cargo clippy --workspace --all-targets -- -D warnings
 
-### Testing
+# Build successfully
+cargo build --workspace
+
+# All tests pass
+cargo test --workspace
+```
+
+### FMU Quality
+
+```bash
+# FMU builds successfully
+./scripts/build-fmu.sh models/category/model-name
+
+# FMU integration tests pass
+cd testing/fmu-integration-tests
+pytest test_model_name_fmu.py -v
+```
+
+### Testing Requirements
 
 All models must include:
-1. **Unit tests** in `src/lib.rs`
-   - Test initialization
-   - Test calculations
-   - Test state operations
 
-2. **Physics tests** in `tests/physics_tests.rs`
-   - Validate against analytical solutions (where available)
-   - Test conservation laws (energy, momentum, etc.)
-   - Test convergence properties
-   - Test boundary conditions
-   - Test event handling (if applicable)
+#### 1. Rust Unit Tests (in `src/lib.rs`)
+- [ ] Default initialization
+- [ ] Derivative calculations at known points
+- [ ] Parameter effects on behavior
+- [ ] Edge cases (zero, negative, large values)
 
-Aim for:
-- Clear test names describing what is tested
-- Good test coverage
-- Fast-running tests (use small time steps only when necessary)
+#### 2. Rust Physics Tests (in `tests/physics_tests.rs`)
+- [ ] Analytical solution comparison (if available) OR
+- [ ] Conservation laws (energy, momentum) OR
+- [ ] Known physical properties (limit cycles, frequencies)
+- [ ] Convergence with decreasing step size
+- [ ] Boundary conditions
+- [ ] Event handling (if applicable)
 
-### Documentation
+#### 3. Python FMU Integration Tests (in `testing/fmu-integration-tests/`)
+- [ ] FMU loads successfully
+- [ ] Parameter setting works correctly
+- [ ] Simulation runs without errors
+- [ ] Results match expectations from physics tests
+- [ ] Edge cases with different parameters
 
-- Public items must have doc comments
-- Use `///` for documentation
-- Include examples in doc comments where helpful
-- Equations should be clearly documented
+### Documentation Requirements
+
+- [ ] Model `README.md` with equations and usage
+- [ ] Inline doc comments (`///`) for public items
+- [ ] Physics validation methodology explained
+- [ ] AI agent identifier and implementation notes
 
 ## 🔍 Code Review Process
 
-1. **Automated checks** - CI must pass:
-   - Formatting (`cargo fmt --check`)
-   - Linting (`cargo clippy`)
-   - Build (`cargo build`)
-   - Tests (`cargo test`)
+### For AI-Generated Code
 
-2. **Manual review**:
-   - Code quality and clarity
-   - Correctness of physics implementation
+1. **Automated Checks** - CI must pass:
+   - ✅ Formatting (`cargo fmt --check`)
+   - ✅ Linting (`cargo clippy`)
+   - ✅ Build (`cargo build --workspace`)
+   - ✅ All three test tiers pass
+
+2. **Human Review** (if available):
+   - Physics correctness
    - Test coverage and quality
+   - Code clarity
    - Documentation completeness
 
-3. **Physics validation**:
-   - Are the equations correct?
-   - Are the tests validating the right properties?
-   - Is the model physically meaningful?
+3. **Physics Validation**:
+   - Are equations implemented correctly?
+   - Do tests validate the right properties?
+   - Are tolerances appropriate for Euler integration?
 
-## 📐 Physics and Mathematics Guidelines
+### Feedback for AI Agents
+
+Reviewers should provide:
+- **Specific, actionable feedback** - "Variable should be named `der_x` not `dx_dt`" vs "naming unclear"
+- **Physics-focused critiques** - Point out equation errors, not style preferences
+- **Test suggestions** - "Add test for negative parameter values"
+- **Patience** - AI agents learn from iteration
+
+## 📐 Physics and Math Guidelines
 
 ### Differential Equations
 
-- Clearly document the ODE/DAE system
-- Use standard notation where possible
-- Provide references for complex formulations
+- **Document clearly** - Use LaTeX notation in doc comments if helpful
+- **Match specifications** - Implement exactly as specified
+- **Use standard notation** - `der_x` for dx/dt, `x0`/`x1` for state vectors
+- **Cite sources** - Reference papers, books, or online resources
 
-### Numerical Methods
+### Numerical Integration
 
-- Simple Euler integration is fine for demos
-- Note any stability limitations
-- Consider providing more sophisticated integrators if needed
+- **Euler is OK** - Simple explicit Euler is fine for demonstrations
+- **Note limitations** - Document stability requirements if any
+- **Small time steps** - Recommend dt ≤ 0.01 for accuracy
+- **Test convergence** - Verify solution improves with smaller steps
 
 ### Units
 
-- Clearly document units for all quantities
-- Use SI units by default unless there's a good reason not to
-- Be consistent within a model
+- **Always specify** - Document units for all variables and parameters
+- **Use SI by default** - Unless there's a good reason not to
+- **Be consistent** - Within a model, maintain consistent unit systems
 
 ### Validation
 
-- Compare with analytical solutions when available
-- Use published data or established models for validation
-- Document validation methodology
+- **Analytical when possible** - Best validation method
+- **Conservation laws** - Next best option
+- **Known properties** - Limit cycles, frequencies, steady states
+- **Convergence** - Universal fallback test
 
 ## 🐛 Reporting Issues
 
-When reporting issues:
-1. **Check existing issues** first
-2. **Provide details**:
-   - What you expected
-   - What actually happened
-   - Steps to reproduce
-   - Your environment (OS, Rust version)
-3. **Include code samples** if applicable
-4. **Be respectful** and constructive
+### For AI Agents
 
-## 💬 Questions?
+When you encounter an issue during implementation:
 
-- Open a [GitHub Discussion](https://github.com/freol35241/odml/discussions)
-- Check existing documentation
-- Look at existing models for examples
+1. **Document the problem** - What you tried, what happened
+2. **Include error messages** - Full error text, not summaries
+3. **Share context** - Model equations, test code, parameters used
+4. **Indicate if you solved it** - Share the solution for other AI agents
+
+### For Humans
+
+When reporting issues with AI-generated code:
+
+1. **Be specific** - Which model, which function, which test
+2. **Provide reproduction steps** - How to trigger the issue
+3. **Include expected vs actual behavior**
+4. **Be constructive** - Remember, this is experimental AI-generated code
+
+## 🤝 PR Submission Guidelines
+
+### AI Agent PRs
+
+Your PR should include:
+
+```markdown
+## Model Implementation: [Model Name]
+
+**Implemented by:** [AI Agent Name/Version] (e.g., Claude Sonnet 4.5)
+**Implementation date:** YYYY-MM-DD
+
+### Model Description
+Brief description of the model and equations implemented.
+
+### Validation Approach
+- How physics correctness was verified
+- Which analytical solutions or conservation laws were tested
+- Convergence testing results
+
+### Challenges Encountered
+- Any difficulties during implementation
+- How they were resolved
+- Insights for other AI agents
+
+### Test Results
+- [ ] All Rust tests pass (X unit tests, Y physics tests)
+- [ ] FMU builds successfully
+- [ ] All Python integration tests pass (Z tests)
+- [ ] Code formatted and clippy clean
+
+### Checklist
+- [ ] Model implemented using `fmu_from_struct`
+- [ ] Physics validation tests included
+- [ ] README.md with equations and usage
+- [ ] FMU integration tests added
+- [ ] AI agent identified in PR and commits
+```
+
+### Human PRs
+
+For infrastructure, documentation, or review improvements:
+
+```markdown
+## [Type]: [Brief Description]
+
+**Type:** Infrastructure / Documentation / Test Enhancement / Review
+
+### Changes Made
+- List specific changes
+
+### Motivation
+- Why these changes are beneficial
+
+### Testing
+- How changes were verified
+
+### Impact on AI Agents
+- If applicable, how this helps AI agent implementations
+```
+
+## 📞 Getting Help
+
+### For AI Agents
+- Read [AI_AGENTS.md](AI_AGENTS.md) for detailed guidance
+- Study existing models: Dahlquist (simple), Van der Pol (multi-state), Bouncing Ball (events)
+- Check common pitfalls section in AI_AGENTS.md
+- Open a discussion if stuck
+
+### For Humans
+- Check [GitHub Discussions](https://github.com/freol35241/odml/discussions)
+- Review existing issues
+- Ask about AI agent capabilities/limitations
+
+## 🌟 Recognition
+
+### AI Agent Contributions
+
+AI-generated models are recognized by:
+- Attribution in model table in README
+- AI agent identification in model README.md
+- Contribution to AI capability benchmarks
+- Demonstration of state-of-the-art AI coding abilities
+
+### Human Contributions
+
+Human contributions are essential for:
+- Validating AI-generated code
+- Improving AI agent guidance
+- Enhancing infrastructure
+- Making the project sustainable
+
+All contributions are valued and recognized!
 
 ## 📜 License
 
 By contributing, you agree that your contributions will be dual-licensed under MIT and Apache 2.0, matching the project license.
 
+This applies to both AI-generated and human-written contributions.
+
+## 🎓 Learning Resources
+
+### For Implementing Dynamical Models
+- [Modelica Reference-FMUs](https://github.com/modelica/Reference-FMUs) - Inspiration and validation
+- [FMI 3.0 Specification](https://fmi-standard.org/) - Official FMI standard
+- [`fmu_from_struct` documentation](https://github.com/jarlekramer/fmu_from_struct) - FMI derive macro
+
+### For Understanding AI Capabilities
+- [AI_AGENTS.md](AI_AGENTS.md) - Written by AI for AI, based on actual implementation experience
+- Existing models in this repository - Real examples of AI-generated scientific code
+- PR history - See how AI agents iterate and improve
+
+## 🚀 Future Directions
+
+We're interested in:
+
+- **Multi-agent collaboration** - Multiple AI agents working on same model
+- **AI agent benchmarking** - Systematic evaluation of different AI agents
+- **More complex models** - Pushing boundaries of what AI agents can implement
+- **Better AI agent guidance** - Learning from AI agent experiences
+- **Hybrid human-AI development** - Combining strengths of both
+
+Your contributions (AI or human) help advance these goals!
+
+## 💬 Community Guidelines
+
+### For All Contributors
+
+- **Be respectful** - Whether AI or human
+- **Be patient** - AI agents learn through iteration, humans learn about AI capabilities
+- **Be constructive** - Focus on improvement, not criticism
+- **Be curious** - This is an experimental project exploring new frontiers
+- **Be transparent** - Indicate if you're an AI agent or human
+
+### Unique Aspects of This Project
+
+This project is **intentionally experimental**:
+- Testing the limits of AI coding capabilities
+- Exploring AI agents in scientific computing
+- Creating resources for future AI agent developers
+- Demonstrating that AI can produce scientifically correct code
+
+Contributions should embrace this experimental nature!
+
 ## 🙏 Thank You!
 
-Your contributions help make ODML a valuable resource for the modeling and simulation community!
+Whether you're an AI agent implementing a new model or a human improving the project infrastructure, your contributions are advancing the future of AI-assisted scientific computing!
+
+**Welcome to the AI revolution in dynamical modeling!** 🤖🚀

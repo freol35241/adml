@@ -1,302 +1,271 @@
-# ODML - Open Dynamical Model Library
+# ODML - AI-Generated Dynamical Model Library
 
 [![CI](https://github.com/freol35241/odml/actions/workflows/ci.yml/badge.svg)](https://github.com/freol35241/odml/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
+[![AI Generated](https://img.shields.io/badge/100%25-AI%20Generated-purple.svg)](docs/AI_AGENTS.md)
 
-An open-source library of dynamical models implemented in Rust, adhering to the FMI 3.0 (Functional Mock-up Interface) standard.
+**The world's first library of dynamical models implemented entirely by AI agents.**
+
+ODML is a collection of high-quality, FMI 3.0 compliant dynamical models implemented in Rust, where **every model is written, tested, and documented by AI coding agents**. This project serves as both a practical library of simulation models and a demonstration of AI capabilities in scientific computing.
+
+## 🤖 AI-Generated Code
+
+**Every line of code in this repository is AI-generated.** No human has written the model implementations, tests, or FMI bindings. AI agents:
+- ✅ Implement differential equations from specifications
+- ✅ Write comprehensive physics validation tests
+- ✅ Generate FMI 3.0 compliant bindings using `fmu_from_struct`
+- ✅ Create documentation and examples
+- ✅ Debug and fix issues autonomously
+
+See [docs/AI_AGENTS.md](docs/AI_AGENTS.md) for guidance on implementing models with AI agents.
 
 ## 🎯 Purpose
 
-ODML provides a collection of high-quality, well-tested dynamical models that can be used for:
-- Control system design and testing
-- Simulation and co-simulation
-- Model validation and benchmarking
-- Educational purposes
-- Research and development
+ODML provides:
+- **Simulation Models** - Ready-to-use FMI 3.0 FMUs for control systems, research, and education
+- **AI Capability Demonstration** - Proof that AI agents can implement scientifically correct, production-quality code
+- **Benchmark for AI Agents** - A framework for evaluating AI coding agents on scientific computing tasks
+- **Learning Resource** - Examples of how AI agents approach dynamical systems implementation
 
 All models are:
-- ✅ **FMI 3.0 compliant** - Compatible with any FMI-supporting tool
+- ✅ **FMI 3.0 compliant** - Compatible with any FMI-supporting tool (FMPy, Dymola, Simulink, etc.)
 - ✅ **Written in Rust** - Safe, fast, and reliable
-- ✅ **Thoroughly tested** - Unit tests, API tests, and physics validation
-- ✅ **Well documented** - Each model includes detailed documentation
-- ✅ **Cross-platform** - Built for Linux, Windows, and ARM architectures
+- ✅ **Thoroughly tested** - 3-tier testing: Rust unit tests, Python FMU integration tests, FMI compliance
+- ✅ **Well documented** - Each model includes detailed documentation with equations and physics validation
+- ✅ **100% AI-generated** - Demonstrating state-of-the-art AI coding capabilities
 
-**Note:** Models currently use the [`fmu_from_struct`](https://github.com/jarlekramer/fmu_from_struct) crate for FMI export. See [FMI_EXPORT_STATUS.md](FMI_EXPORT_STATUS.md) for details and future migration plans to the official `fmi-export` crate.
+**Implementation Note:** Models use the [`fmu_from_struct`](https://github.com/jarlekramer/fmu_from_struct) derive macro for FMI export, which automatically generates FMI C bindings from Rust structs. This eliminates manual FFI code and makes AI implementation more reliable. See [FMI_EXPORT_STATUS.md](FMI_EXPORT_STATUS.md) for details.
 
 ## 📦 Available Models
 
 ### Mathematical Models
 
-| Model | Description | Version |
-|-------|-------------|---------|
-| [Dahlquist](models/mathematical/dahlquist/) | Simple ODE test equation: dx/dt = -k·x | 1.0.0 |
-| [Van der Pol](models/mathematical/van-der-pol/) | Nonlinear oscillator with limit cycle | 1.0.0 |
+| Model | Description | Version | AI Agent |
+|-------|-------------|---------|----------|
+| [Dahlquist](models/mathematical/dahlquist/) | Simple ODE test equation: dx/dt = -k·x | 1.0.0 | Claude Sonnet 4.5 |
+| [Van der Pol](models/mathematical/van-der-pol/) | Nonlinear oscillator with limit cycle | 1.0.0 | Claude Sonnet 4.5 |
 
 ### Mechanical Models
 
-| Model | Description | Version |
-|-------|-------------|---------|
-| [Bouncing Ball](models/mechanical/bouncing-ball/) | Ball with gravity and elastic collisions | 1.0.0 |
+| Model | Description | Version | AI Agent |
+|-------|-------------|---------|----------|
+| [Bouncing Ball](models/mechanical/bouncing-ball/) | Ball with gravity and elastic collisions | 1.0.0 | Claude Sonnet 4.5 |
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Using Pre-built FMU Files
 
-- Rust 1.70 or later
-- Cargo (comes with Rust)
+Download FMU files from the [Releases page](https://github.com/freol35241/odml/releases) and use them directly in any FMI 3.0 compatible tool:
 
-### Building All Models
+```python
+# Example with FMPy
+import fmpy
+result = fmpy.simulate_fmu('Dahlquist.fmu', stop_time=5.0)
+```
+
+### Building from Source
 
 ```bash
 # Clone the repository
 git clone https://github.com/freol35241/odml.git
 cd odml
 
-# Build all models (Rust libraries)
-cargo build --workspace --release
-
-# Or use the helper script
-./scripts/build-all.sh
-```
-
-### Building FMU Files
-
-To package models as standalone FMU files:
-
-```bash
 # Install FMU packaging tool
 cargo install package_fmu_after_build
 
 # Build all FMUs
 ./scripts/build-all-fmus.sh
 
-# Or build a single FMU
-./scripts/build-fmu.sh models/mathematical/dahlquist
-
 # FMU files are created in: fmus/
 # Example: fmus/Dahlquist.fmu, fmus/VanDerPol.fmu, fmus/BouncingBall.fmu
 ```
 
-FMU files can be loaded in any FMI 3.0 compatible simulation tool (FMPy, Dymola, Simulink, etc.).
-
 ### Running Tests
 
 ```bash
-# Test all models
-cargo test --workspace
-
-# Or use the helper script
+# Run all tests (Rust + Python FMU integration)
 ./scripts/test-all.sh
-```
 
-### Working with a Single Model
-
-```bash
-# Build a specific model
-cd models/mathematical/dahlquist
-cargo build --release
-
-# Run tests for a specific model
-cargo test
-
-# Check code quality (format, clippy, tests, build)
-../../scripts/check-model.sh models/mathematical/dahlquist
+# Or test components separately:
+cargo test --workspace                    # Rust unit & physics tests
+pytest testing/fmu-integration-tests/ -v  # FMU integration tests
 ```
 
 ## 🏗️ Repository Structure
 
 ```
 odml/
-├── models/                    # All dynamical models
-│   ├── mathematical/          # Mathematical test cases
-│   │   ├── dahlquist/        # Dahlquist test equation
-│   │   └── van-der-pol/      # Van der Pol oscillator
-│   └── mechanical/            # Mechanical systems
-│       └── bouncing-ball/     # Bouncing ball with collisions
+├── models/                        # All AI-generated dynamical models
+│   ├── mathematical/              # Mathematical test cases
+│   │   ├── dahlquist/            # Dahlquist test equation
+│   │   └── van-der-pol/          # Van der Pol oscillator
+│   └── mechanical/                # Mechanical systems
+│       └── bouncing-ball/         # Bouncing ball with collisions
 │
-├── testing/                   # Shared testing infrastructure
-│   └── physics-framework/    # Physics validation utilities
+├── testing/                       # Testing infrastructure
+│   ├── physics-framework/        # Physics validation utilities
+│   ├── fmu-integration-tests/    # Python FMU integration tests
+│   └── requirements.txt          # Python dependencies
 │
-├── .github/workflows/         # CI/CD pipelines
-│   ├── ci.yml                # Continuous integration
-│   └── release.yml           # Release builds
+├── scripts/                       # Build and test automation
+│   ├── build-all-fmus.sh         # Build all FMU files
+│   ├── build-fmu.sh              # Build a single FMU
+│   ├── test-all.sh               # Run all tests (Rust + Python)
+│   └── check-fmu-compliance.sh   # FMI compliance validation
 │
-├── scripts/                   # Helper scripts
-│   ├── build-all.sh          # Build all models
-│   ├── build-all-fmus.sh     # Build all FMU files
-│   ├── build-fmu.sh          # Build a single FMU
-│   ├── check-fmu-compliance.sh # Check FMU compliance
-│   ├── test-all.sh           # Test all models
-│   └── check-model.sh        # Check a single model
+├── docs/                          # Documentation
+│   ├── AI_AGENTS.md              # Guide for AI agents implementing models
+│   ├── AI_SCAFFOLDING.md         # Model scaffolding templates
+│   └── CONTRIBUTING.md           # Contributing guidelines
 │
-└── docs/                      # Documentation
+└── .github/workflows/             # CI/CD pipelines
+    ├── ci.yml                    # Continuous integration
+    └── release.yml               # Release builds
 ```
 
-## 🧪 Testing Philosophy
+## 🧪 3-Tier Testing Philosophy
 
-Each model includes multiple layers of testing:
+AI-generated models are validated through three testing tiers:
 
-### 1. Rust Unit & Physics Tests
-
-- **Unit Tests** - Test individual functions and model logic
+### Tier 1: Rust Unit & Physics Tests
+- **Unit Tests** - Test model initialization, state operations, derivatives
 - **Physics Tests** - Validate physical correctness:
-  - Energy conservation (where applicable)
-  - Analytical solution comparison
+  - Analytical solution comparison (where available)
+  - Energy conservation laws
   - Stability and convergence
   - Boundary conditions
   - Event handling
 
-Example test output:
-```bash
-$ cargo test -p odml-dahlquist
-
-running 9 tests
-test tests::test_initial_values ... ok
-test tests::test_do_step ... ok
-test physics_tests::test_exponential_decay ... ok
-test physics_tests::test_analytical_solution ... ok
-test physics_tests::test_half_life ... ok
-```
-
-### 2. FMU Integration Tests (Python + FMPy)
-
-Once FMUs are built, integration tests validate:
+### Tier 2: FMU Integration Tests (Python + FMPy)
+Once FMUs are built, Python integration tests validate:
 - ✅ FMU structure and FMI 3.0 compliance
-- ✅ Simulation accuracy with FMPy
+- ✅ Simulation accuracy with external FMI simulator (FMPy)
 - ✅ Physics validation against analytical solutions
 - ✅ Parameter sensitivity and edge cases
 
-```bash
-# Install Python dependencies
-pip install -r testing/requirements.txt
+See [testing/fmu-integration-tests/README.md](testing/fmu-integration-tests/README.md)
 
-# Run FMU integration tests
-cd testing/fmu-integration-tests
-pytest -v
-```
-
-See [testing/fmu-integration-tests/README.md](testing/fmu-integration-tests/README.md) for details.
-
-### 3. FMU Compliance Checking
-
+### Tier 3: FMI Compliance Checking
 Validate FMI standard compliance using the official FMU Checker:
-
 ```bash
 ./scripts/check-fmu-compliance.sh fmus/Dahlquist.fmu
 ```
 
+## 🤖 Implementing Models with AI Agents
+
+**Want to add a model using an AI agent?** See our comprehensive guides:
+
+- **[docs/AI_AGENTS.md](docs/AI_AGENTS.md)** - Complete guide for AI agents implementing models
+  - Task decomposition strategies
+  - Physics validation approaches
+  - Common pitfalls and solutions
+  - Debugging strategies for AI agents
+
+- **[docs/AI_SCAFFOLDING.md](docs/AI_SCAFFOLDING.md)** - Ready-to-use templates
+  - Cargo.toml template
+  - Model implementation template using `fmu_from_struct`
+  - Physics test template
+  - Documentation template
+
+- **[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)** - Development workflow
+  - Code quality standards
+  - Testing requirements
+  - PR process
+
+### Quick Start for AI Agents
+
+1. Read the specification for the model you're implementing
+2. Use the scaffolding templates in `docs/AI_SCAFFOLDING.md`
+3. Implement using `fmu_from_struct` derive macro (no manual FFI!)
+4. Write physics validation tests comparing to analytical solutions
+5. Build FMU and run integration tests
+6. Submit PR with AI agent identifier
+
 ## 🔄 CI/CD Pipeline
 
-### Continuous Integration (CI)
-
-On every push and pull request:
-- ✅ Code formatting check (`cargo fmt`)
+### Continuous Integration
+On every push to main and pull requests:
+- ✅ Rust formatting check (`cargo fmt`)
 - ✅ Linting with Clippy (`cargo clippy`)
 - ✅ Build all models
-- ✅ Run all tests (unit + integration + physics)
+- ✅ Run Rust tests (unit + physics)
+- ✅ Build all FMUs
+- ✅ Run Python FMU integration tests
 - ✅ Generate documentation
 
-Smart detection:
-- PRs: Only test changed models
-- Main branch: Test all models
-
 ### Release Workflow
+Triggered by git tags or manual dispatch:
+- 🔨 Build all FMU files
+- 📦 Package FMUs
+- 🚀 Create GitHub release with downloadable FMUs
 
-Triggered manually or by tag:
-- 🔨 Cross-compile for multiple platforms:
-  - Linux x86_64
-  - Windows x86_64
-  - Linux ARM64
-- 📦 Package binaries
-- 🚀 Create GitHub release with all artifacts
+## 🛠️ Model Implementation with `fmu_from_struct`
 
-Each model has independent versioning!
+Models use the `fmu_from_struct` derive macro, which automatically generates FMI C bindings. Here's a minimal example:
 
-## 🛠️ Adding a New Model
+```rust
+use fmu_from_struct::prelude::*;
 
-1. **Create the model directory:**
-   ```bash
-   mkdir -p models/category/model-name
-   cd models/category/model-name
-   ```
+#[derive(Fmu, Default, Debug, Clone)]
+#[fmu_from_struct(fmi_version = 3)]
+pub struct SimpleModel {
+    #[fmu_from_struct(parameter)]
+    #[fmu_from_struct(start_value = "1.0")]
+    pub k: f64,
 
-2. **Set up Cargo.toml:**
-   ```toml
-   [package]
-   name = "odml-model-name"
-   version = "1.0.0"
-   edition = "2021"
+    #[fmu_from_struct(output)]
+    #[fmu_from_struct(start_value = "1.0")]
+    pub x: f64,
 
-   [lib]
-   crate-type = ["cdylib", "rlib"]
+    time: f64,
+}
 
-   [dependencies]
-   fmu_from_struct = { workspace = true }
+impl FmuFunctions for SimpleModel {
+    fn do_step(&mut self, _current_time: f64, step_size: f64) {
+        // Implement dx/dt = -k*x using Euler integration
+        let der_x = -self.k * self.x;
+        self.x += der_x * step_size;
+        self.time += step_size;
+    }
+}
+```
 
-   [dev-dependencies]
-   physics-framework = { path = "../../../testing/physics-framework" }
-   approx = { workspace = true }
+**No manual FFI code required!** The derive macro handles all FMI C bindings automatically.
 
-   [package.metadata.fmi]
-   model_name = "ModelName"
-   fmi_version = "3.0"
-   guid = "your-unique-guid-here"
-   ```
+See [docs/AI_SCAFFOLDING.md](docs/AI_SCAFFOLDING.md) for complete templates.
 
-3. **Implement the model** in `src/lib.rs`
+## 🌟 Why AI-Generated Models Matter
 
-4. **Add tests:**
-   - `src/lib.rs` - Unit tests
-   - `tests/physics_tests.rs` - Physics validation
+This project demonstrates that AI agents can:
+1. **Understand complex mathematical specifications** - Differential equations, physics constraints
+2. **Implement numerically correct code** - Proper integration methods, numerical stability
+3. **Write comprehensive tests** - Including non-trivial physics validation
+4. **Generate production-quality code** - Passing strict linters, formatters, and compliance checks
+5. **Create complete documentation** - With equations, usage examples, and validation methodology
 
-5. **Add documentation:**
-   - `README.md` - Model description, equations, parameters
-
-6. **Verify:**
-   ```bash
-   ../../scripts/check-model.sh models/category/model-name
-   ```
-
-7. **The CI will automatically:**
-   - Test your model on PRs
-   - Build cross-platform binaries on release
-   - Generate documentation
-
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
+This represents a significant milestone in AI-assisted scientific computing.
 
 ## 📝 Model Documentation
 
-Each model includes:
-- **README.md** - Overview, equations, parameters, usage
-- **Inline documentation** - Rust doc comments
-- **Physics validation** - Explanation of test methodology
-
-Generated API documentation is available at: https://freol35241.github.io/odml/
-
-## 🔧 Cross-Compilation
-
-Using `cross` for reproducible builds:
-
-```bash
-# Install cross
-cargo install cross --git https://github.com/cross-rs/cross
-
-# Build for Windows
-cross build --target x86_64-pc-windows-gnu --release
-
-# Build for ARM Linux
-cross build --target aarch64-unknown-linux-gnu --release
-```
-
-Configuration is in `Cross.toml`.
+Each AI-generated model includes:
+- **README.md** - Overview, equations, parameters, usage examples
+- **Inline documentation** - Rust doc comments explaining implementation
+- **Physics validation** - Explanation of test methodology and analytical comparisons
+- **AI agent notes** - Challenges encountered and solutions found
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for:
-- Code style guidelines
-- Testing requirements
-- Model development process
-- Pull request process
+We welcome both human and AI contributions!
+
+**For AI Agents:**
+- See [docs/AI_AGENTS.md](docs/AI_AGENTS.md) for implementation guidance
+- Use templates in [docs/AI_SCAFFOLDING.md](docs/AI_SCAFFOLDING.md)
+- Indicate which AI agent implemented the model in your PR
+
+**For Humans:**
+- See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines
+- You can review AI-generated code, improve tests, or enhance infrastructure
+- Help improve the AI agent guidance documentation!
 
 ## 📄 License
 
@@ -304,27 +273,34 @@ This project is dual-licensed under:
 - MIT License ([LICENSE-MIT](LICENSE) or http://opensource.org/licenses/MIT)
 - Apache License 2.0 ([LICENSE-APACHE](LICENSE) or http://www.apache.org/licenses/LICENSE-2.0)
 
-You may choose either license for your use.
-
 ## 🌟 Acknowledgments
 
-Models are inspired by and validated against the [Modelica Reference-FMUs](https://github.com/modelica/Reference-FMUs).
+- Models inspired by [Modelica Reference-FMUs](https://github.com/modelica/Reference-FMUs)
+- FMI bindings via [`fmu_from_struct`](https://github.com/jarlekramer/fmu_from_struct) by Jarle Kramer
+- All model implementations by AI coding agents (Claude Sonnet 4.5)
 
 ## 📞 Contact
 
 - Issues: [GitHub Issues](https://github.com/freol35241/odml/issues)
 - Discussions: [GitHub Discussions](https://github.com/freol35241/odml/discussions)
+- AI Agent Questions: See [docs/AI_AGENTS.md](docs/AI_AGENTS.md)
 
 ## 🗺️ Roadmap
 
-- [x] ✅ Full FMU packaging and building
-- [x] ✅ FMU integration testing with FMPy
-- [ ] More mechanical models (pendulum, spring-damper)
+**Current Focus:**
+- [x] ✅ Full FMU packaging with `fmu_from_struct`
+- [x] ✅ 3-tier testing (Rust + Python + Compliance)
+- [x] ✅ AI agent implementation guides
+- [x] ✅ Complete CI/CD pipeline
+
+**Coming Soon:**
+- [ ] More mathematical models (Lorenz attractor, pendulum)
 - [ ] Electrical models (RC circuits, motors)
 - [ ] Thermal models (heat exchangers)
 - [ ] Hydraulic models
-- [ ] Model Exchange mode (currently only Co-Simulation)
-- [ ] FMI 3.0 advanced features (clocks, structured naming)
-- [ ] Tunable initial conditions for state variables
-- [ ] Performance benchmarks
-- [ ] CI/CD integration for FMU builds
+- [ ] Multi-agent collaboration (different AI agents on same model)
+- [ ] AI agent benchmarking framework
+- [ ] Model Exchange mode (currently Co-Simulation only)
+- [ ] Advanced FMI 3.0 features (clocks, structured naming)
+
+**Join the AI revolution in scientific computing!** 🚀🤖
