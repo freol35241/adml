@@ -222,12 +222,10 @@ jobs:
       pull-requests: write
       contents: write
     steps:
-      - name: Checkout pr-images branch
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: pr-images
-          path: pr-images-repo
-        continue-on-error: true
+          fetch-depth: 0
 
       - name: Download FMU figures
         uses: actions/download-artifact@v4
@@ -235,42 +233,44 @@ jobs:
           name: fmu-figures
           path: fmu-figures
 
-      - name: Setup pr-images branch
+      - name: Setup and upload images to pr-images branch
         run: |
-          # Initialize pr-images branch if it doesn't exist
-          if [ ! -d "pr-images-repo/.git" ]; then
-            echo "Creating pr-images branch..."
-            mkdir -p pr-images-repo
-            cd pr-images-repo
-            git init
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git checkout -b pr-images
+          PR_NUM=${{ github.event.pull_request.number }}
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Try to checkout pr-images branch, create if it doesn't exist
+          if git ls-remote --exit-code --heads origin pr-images; then
+            echo "pr-images branch exists, checking out..."
+            git fetch origin pr-images
+            git checkout pr-images
+          else
+            echo "pr-images branch doesn't exist, creating..."
+            git checkout --orphan pr-images
+            git rm -rf .
             echo "# PR Images" > README.md
             echo "This branch stores images for PR comments" >> README.md
             git add README.md
             git commit -m "Initialize pr-images branch"
-          else
-            cd pr-images-repo
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git push origin pr-images
           fi
-
-      - name: Upload images to pr-images branch
-        run: |
-          PR_NUM=${{ github.event.pull_request.number }}
-          cd pr-images-repo
 
           # Create directory for this PR
           mkdir -p pr-${PR_NUM}
 
           # Copy images
-          cp ../fmu-figures/*.png pr-${PR_NUM}/
+          cp fmu-figures/*.png pr-${PR_NUM}/
 
           # Commit and push
           git add pr-${PR_NUM}/
-          git commit -m "Update figures for PR #${PR_NUM}" || echo "No changes to commit"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git pr-images --force
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update figures for PR #${PR_NUM}"
+            git push origin pr-images
+          fi
 
       - name: Post/Update PR comment with embedded images
         uses: marocchino/sticky-pull-request-comment@v2
