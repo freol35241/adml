@@ -261,6 +261,37 @@ The plotting script will validate configurations and fail with clear error messa
 - Array lengths don't match (e.g., variables vs. colors)
 - Unknown plot type is specified
 
+### ⚠️ CRITICAL: Parameters vs Outputs
+
+**Only output variables can be plotted!** Parameters set in the `[parameters]` section are NOT available in simulation results.
+
+**This FAILS:**
+```toml
+[parameters]
+input_power = 1000.0
+
+[[subplot]]
+variables = ["input_power", "output_power"]  # ❌ input_power not in results!
+```
+
+**Error:**
+```
+ValueError: Variable 'input_power' not found in simulation results
+```
+
+**Correct approach:**
+```toml
+[parameters]
+input_power = 1000.0  # Set parameter value
+
+[[subplot]]
+variables = ["output_power"]  # ✅ Only plot outputs
+reference_line = 1000.0  # ✅ Show parameter as reference line
+reference_label = "Input Power (1000 W)"
+```
+
+**Why:** In FMI, parameters (`causality="parameter"`) are set before simulation and are not recorded in the results array. Only outputs (`causality="output"`) appear in results and can be plotted as variables. Use `reference_line` to show parameter values on plots.
+
 ## For AI Agents
 
 When creating or modifying `plot_config.toml` files:
@@ -268,10 +299,11 @@ When creating or modifying `plot_config.toml` files:
 1. **Start with the model's physics** - What variables are most meaningful to visualize?
 2. **Use appropriate plot types** - Time series for evolution, phase portraits for state space
 3. **Limit to 4 subplots** - Keep it readable at 10×6 inches
-4. **Label clearly** - Include units in axis labels
-5. **Choose meaningful colors** - Blue for primary, red for secondary, green for trajectories
-6. **Add reference lines** - For ground level, equilibrium points, zero-crossings, etc.
-7. **Match simulation time to dynamics** - Fast systems need shorter stop_time, slow systems need longer
+4. **Label clearly with CORRECT units** - Time is ALWAYS in seconds (FMI standard). Don't label as hours unless you convert the data.
+5. **Only plot outputs, not parameters** - Parameters aren't in simulation results. Use `reference_line` to show parameter values.
+6. **Choose meaningful colors** - Blue for primary, red for secondary, green for trajectories
+7. **Add reference lines** - For ground level, equilibrium points, parameter values, zero-crossings, etc.
+8. **Match simulation time to dynamics** - Fast systems need shorter stop_time, slow systems need longer
 
 ## Error Handling
 
