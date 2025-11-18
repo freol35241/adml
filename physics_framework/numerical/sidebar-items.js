@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["compare_with_analytical","find_peaks"]};
