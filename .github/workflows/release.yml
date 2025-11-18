@@ -16,9 +16,16 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Build FMUs for all models
+  # Build FMUs for all models (cross-compile for Linux and Windows)
   build-fmus:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          - os: windows-latest
+            platform: windows-x86_64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,18 +37,27 @@ jobs:
           cargo install package_fmu_after_build
 
       - name: Build all FMUs
+        shell: bash
         run: |
           ./scripts/build-all-fmus.sh
 
-      - name: List built FMUs
+      - name: List built FMUs (Linux)
+        if: runner.os == 'Linux'
         run: |
-          echo "Built FMUs:"
+          echo "Built FMUs for ${{ matrix.platform }}:"
+          ls -lh fmus/*.fmu
+
+      - name: List built FMUs (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "Built FMUs for ${{ matrix.platform }}:"
           ls -lh fmus/*.fmu
 
       - name: Upload FMU artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: fmus
+          name: fmus-${{ matrix.platform }}
           path: fmus/*.fmu
 
   # Create GitHub release with all FMUs
@@ -53,16 +69,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download FMU artifacts
+      - name: Download Linux FMU artifacts
         uses: actions/download-artifact@v4
         with:
-          name: fmus
-          path: fmus/
+          name: fmus-linux-x86_64
+          path: fmus/linux-x86_64/
+
+      - name: Download Windows FMU artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: fmus-windows-x86_64
+          path: fmus/windows-x86_64/
 
       - name: List downloaded FMUs
         run: |
           echo "📦 FMU files for release:"
-          ls -lh fmus/*.fmu
+          echo ""
+          echo "Linux x86_64:"
+          ls -lh fmus/linux-x86_64/*.fmu
+          echo ""
+          echo "Windows x86_64:"
+          ls -lh fmus/windows-x86_64/*.fmu
 
       - name: Determine release details
         id: release-details
@@ -94,12 +121,28 @@ jobs:
 
           FMI 3.0 compatible FMU files ready to use in any FMI-supporting simulation tool.
 
+          All models are cross-compiled for **Linux x86_64** and **Windows x86_64**.
+
           ## 📦 Models in this Release
+
+          ### Linux x86_64
 
           EOF
 
-          # List models with descriptions
-          for fmu in fmus/*.fmu; do
+          # List Linux models with descriptions
+          for fmu in fmus/linux-x86_64/*.fmu; do
+            model_name=$(basename "$fmu" .fmu)
+            echo "- **$model_name.fmu** - FMI 3.0 Co-Simulation model" >> release-notes.md
+          done
+
+          cat >> release-notes.md << 'EOF'
+
+          ### Windows x86_64
+
+          EOF
+
+          # List Windows models with descriptions
+          for fmu in fmus/windows-x86_64/*.fmu; do
             model_name=$(basename "$fmu" .fmu)
             echo "- **$model_name.fmu** - FMI 3.0 Co-Simulation model" >> release-notes.md
           done
@@ -108,7 +151,7 @@ jobs:
 
           ## 🚀 How to Use
 
-          1. Download the FMU file for your desired model
+          1. Download the FMU file for your desired model and platform
           2. Load it in any FMI 3.0 compatible tool:
              - FMPy (Python)
              - Dymola
@@ -137,7 +180,7 @@ jobs:
 
           - **FMI Version**: 3.0
           - **Mode**: Co-Simulation
-          - **Platform**: Linux x86_64
+          - **Platforms**: Linux x86_64, Windows x86_64
           - **Built with**: Rust + fmu_from_struct
 
           EOF
@@ -152,7 +195,9 @@ jobs:
           name: ${{ steps.release-details.outputs.name }}
           tag_name: ${{ steps.release-details.outputs.tag }}
           body_path: release-notes.md
-          files: fmus/*.fmu
+          files: |
+            fmus/linux-x86_64/*.fmu
+            fmus/windows-x86_64/*.fmu
           draft: false
           prerelease: false
         env:
@@ -166,6 +211,13 @@ jobs:
           echo "**Tag:** ${{ steps.release-details.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 FMU Files" >> $GITHUB_STEP_SUMMARY
-          ls fmus/*.fmu | while read fmu; do
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Linux x86_64:**" >> $GITHUB_STEP_SUMMARY
+          ls fmus/linux-x86_64/*.fmu | while read fmu; do
+            echo "- $(basename $fmu)" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Windows x86_64:**" >> $GITHUB_STEP_SUMMARY
+          ls fmus/windows-x86_64/*.fmu | while read fmu; do
             echo "- $(basename $fmu)" >> $GITHUB_STEP_SUMMARY
           done
