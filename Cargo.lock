@@ -30,6 +30,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "adml-simple-pendulum"
+version = "1.0.0"
+dependencies = [
+ "approx",
+ "fmu_from_struct",
+ "physics-framework",
+]
+
+[[package]]
 name = "adml-van-der-pol"
 version = "1.0.0"
 dependencies = [

@@ -1,0 +1,24 @@
+[package]
+name = "adml-simple-pendulum"
+version = "1.0.0"
+edition = "2021"
+description = "Simple pendulum model with nonlinear dynamics"
+authors = ["AI Agent <agent@anthropic.com>"]
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+fmu_from_struct = { workspace = true }
+
+[dev-dependencies]
+physics-framework = { path = "../../../testing/physics-framework" }
+approx = { workspace = true }
+
+[package.metadata.fmi]
+model_name = "SimplePendulum"
+fmi_version = "3.0"
+guid = "4f5489d6-a95d-428c-991e-a100a59554e8"
+description = "A classical simple pendulum model with nonlinear dynamics and optional damping. Models a point mass suspended from a fixed pivot, swinging under gravity. Implements the full nonlinear equation of motion: dω/dt = -(g/L)*sin(θ) - (b/m)*ω, providing accurate simulation for both small and large amplitude oscillations."

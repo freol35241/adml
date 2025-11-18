@@ -1,0 +1,59 @@
+title = "Simple Pendulum Dynamics"
+
+[simulation]
+stop_time = 10.0
+step_size = 0.01
+output_interval = 0.05
+
+[parameters]
+g = 9.81
+L = 1.0
+m = 1.0
+b = 0.0
+
+[[subplot]]
+type = "timeseries"
+title = "Angular Position"
+xlabel = "Time [s]"
+ylabel = "Angle [rad]"
+variables = ["theta"]
+colors = ["blue"]
+linewidths = [2.0]
+reference_line = 0.0
+reference_label = "Equilibrium"
+reference_linestyle = "--"
+reference_color = "gray"
+
+[[subplot]]
+type = "timeseries"
+title = "Angular Velocity"
+xlabel = "Time [s]"
+ylabel = "Angular Velocity [rad/s]"
+variables = ["omega"]
+colors = ["red"]
+linewidths = [2.0]
+reference_line = 0.0
+reference_label = "Zero"
+reference_linestyle = "--"
+reference_color = "gray"
+
+[[subplot]]
+type = "timeseries"
+title = "Energy Conservation"
+xlabel = "Time [s]"
+ylabel = "Energy [J]"
+variables = ["energy", "KE", "PE"]
+colors = ["black", "red", "blue"]
+linewidths = [2.5, 1.5, 1.5]
+linestyles = ["-", "--", "--"]
+labels = ["Total", "Kinetic", "Potential"]
+
+[[subplot]]
+type = "phase_portrait"
+title = "Phase Portrait"
+xlabel = "Angle θ [rad]"
+ylabel = "Angular Velocity ω [rad/s]"
+x_variable = "theta"
+y_variable = "omega"
+color = "green"
+linewidth = 1.5
