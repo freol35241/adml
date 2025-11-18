@@ -210,22 +210,31 @@ jobs:
         run: |
           # Determine which models to plot
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # For PRs, only plot models that were changed (not core files)
-            echo "PR mode: selective model plotting"
-            echo "Models from detect-changes: ${{ needs.detect-changes.outputs.models }}"
+            # For PRs, ALWAYS only plot models with actual file changes
+            # (independent of test-all flag which affects testing)
+            echo "PR mode: plotting only models with changed files"
 
-            # Get the list of changed model directories
-            CHANGED_MODELS='${{ needs.detect-changes.outputs.models }}'
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            DIFF_RANGE="$BASE_SHA...HEAD"
 
-            # Filter out non-model paths and convert to FMU names
-            MODEL_NAMES=$(echo "$CHANGED_MODELS" | \
-              jq -r '.[] | select(startswith("models/")) | split("/")[-1] | split("-") | map(. | ascii_downcase | (.[0:1] | ascii_upcase) + .[1:]) | join("")' | \
-              paste -sd, - || true)
+            # Find model directories with actual file changes
+            changed_files=$(git diff --name-only $DIFF_RANGE)
+            changed_model_dirs=$(echo "$changed_files" | grep "^models/" | cut -d/ -f1-3 | sort -u)
 
-            if [ -z "$MODEL_NAMES" ]; then
-              echo "No model directories changed in this PR"
+            if [ -z "$changed_model_dirs" ]; then
+              echo "No model files changed in this PR"
               echo "[]" > plot-manifest.json
             else
+              echo "Changed model directories:"
+              echo "$changed_model_dirs"
+
+              # Convert directory paths to FMU names
+              # e.g., models/thermal/rc-thermal-single-zone → RcThermalSingleZone
+              MODEL_NAMES=$(echo "$changed_model_dirs" | \
+                awk -F/ '{print $NF}' | \
+                awk -F- '{for(i=1;i<=NF;i++){$i=toupper(substr($i,1,1)) substr($i,2)}} 1' OFS="" | \
+                paste -sd, -)
+
               echo "Plotting changed models: $MODEL_NAMES"
               # Run plot generation - errors will be printed to stderr
               if python scripts/generate_fmu_figures.py --models "$MODEL_NAMES" --output-manifest > plot-manifest.json; then

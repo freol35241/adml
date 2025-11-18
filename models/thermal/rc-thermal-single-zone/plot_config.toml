@@ -16,7 +16,7 @@ Q_heat = 5000.0       # Heating power [W]
 [[subplot]]
 type = "timeseries"
 title = "Indoor Temperature Response"
-xlabel = "Time [hours]"
+xlabel = "Time [s]"
 ylabel = "Temperature [°C]"
 variables = ["T_indoor"]
 labels = ["Indoor Temperature"]
@@ -31,7 +31,7 @@ reference_style = "--"
 [[subplot]]
 type = "timeseries"
 title = "Energy Balance"
-xlabel = "Time [hours]"
+xlabel = "Time [s]"
 ylabel = "Power [W]"
 variables = ["Q_loss"]
 labels = ["Heat Loss"]
