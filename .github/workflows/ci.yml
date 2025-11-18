@@ -191,25 +191,28 @@ jobs:
         run: |
           set -e
           # Determine which models to plot
-          if [[ "${{ github.event_name }}" == "pull_request" && "${{ needs.detect-changes.outputs.test-all }}" != "true" ]]; then
-            # For PRs with selective testing, only plot changed models
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # For PRs, only plot models that were changed (not core files)
             echo "PR mode: selective model plotting"
             echo "Models from detect-changes: ${{ needs.detect-changes.outputs.models }}"
 
-            # Convert model paths to FMU names (e.g., "models/mathematical/dahlquist" -> "Dahlquist")
-            MODEL_NAMES=$(echo '${{ needs.detect-changes.outputs.models }}' | \
-              jq -r '.[] | split("/")[-1] | split("-") | map(. | ascii_downcase | (.[0:1] | ascii_upcase) + .[1:]) | join("")' | \
+            # Get the list of changed model directories
+            CHANGED_MODELS='${{ needs.detect-changes.outputs.models }}'
+
+            # Filter out non-model paths and convert to FMU names
+            MODEL_NAMES=$(echo "$CHANGED_MODELS" | \
+              jq -r '.[] | select(startswith("models/")) | split("/")[-1] | split("-") | map(. | ascii_downcase | (.[0:1] | ascii_upcase) + .[1:]) | join("")' | \
               paste -sd, - || echo "")
 
             if [ -z "$MODEL_NAMES" ]; then
-              echo "No models to plot"
+              echo "No model directories changed in this PR"
               echo "[]" > plot-manifest.json
             else
-              echo "Plotting models: $MODEL_NAMES"
+              echo "Plotting changed models: $MODEL_NAMES"
               python scripts/generate_fmu_figures.py --models "$MODEL_NAMES" --output-manifest > plot-manifest.json || echo "[]" > plot-manifest.json
             fi
           else
-            # For main branch or full tests, plot all models
+            # For main branch or non-PR events, plot all models
             echo "Plotting all models"
             python scripts/generate_fmu_figures.py --output-manifest > plot-manifest.json || echo "[]" > plot-manifest.json
           fi
