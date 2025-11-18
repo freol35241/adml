@@ -27,14 +27,17 @@ reference_label = "Ambient (0°C)"
 reference_color = "gray"
 reference_style = "--"
 
-# Subplot 2: Energy balance (heat input vs heat loss)
+# Subplot 2: Heat loss (with constant heat input shown as reference)
 [[subplot]]
 type = "timeseries"
 title = "Energy Balance"
 xlabel = "Time [hours]"
 ylabel = "Power [W]"
-variables = ["Q_heat", "Q_loss"]
-labels = ["Heat Input", "Heat Loss"]
-colors = ["green", "red"]
-linestyles = ["-", "-"]
-linewidths = [2.0, 2.0]
+variables = ["Q_loss"]
+labels = ["Heat Loss"]
+colors = ["red"]
+linewidths = [2.0]
+reference_line = 5000.0
+reference_label = "Heat Input (5000 W)"
+reference_color = "green"
+reference_style = "-"
