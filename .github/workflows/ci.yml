@@ -189,19 +189,29 @@ jobs:
       - name: Generate FMU output figures
         id: generate-figures
         run: |
+          set -e
           # Determine which models to plot
           if [[ "${{ github.event_name }}" == "pull_request" && "${{ needs.detect-changes.outputs.test-all }}" != "true" ]]; then
             # For PRs with selective testing, only plot changed models
+            echo "PR mode: selective model plotting"
+            echo "Models from detect-changes: ${{ needs.detect-changes.outputs.models }}"
+
             # Convert model paths to FMU names (e.g., "models/mathematical/dahlquist" -> "Dahlquist")
             MODEL_NAMES=$(echo '${{ needs.detect-changes.outputs.models }}' | \
               jq -r '.[] | split("/")[-1] | split("-") | map(. | ascii_downcase | (.[0:1] | ascii_upcase) + .[1:]) | join("")' | \
-              paste -sd, -)
-            echo "Plotting models: $MODEL_NAMES"
-            python scripts/generate_fmu_figures.py --models "$MODEL_NAMES" --output-manifest > plot-manifest.json
+              paste -sd, - || echo "")
+
+            if [ -z "$MODEL_NAMES" ]; then
+              echo "No models to plot"
+              echo "[]" > plot-manifest.json
+            else
+              echo "Plotting models: $MODEL_NAMES"
+              python scripts/generate_fmu_figures.py --models "$MODEL_NAMES" --output-manifest > plot-manifest.json || echo "[]" > plot-manifest.json
+            fi
           else
             # For main branch or full tests, plot all models
             echo "Plotting all models"
-            python scripts/generate_fmu_figures.py --output-manifest > plot-manifest.json
+            python scripts/generate_fmu_figures.py --output-manifest > plot-manifest.json || echo "[]" > plot-manifest.json
           fi
 
           # Display manifest
@@ -258,6 +268,7 @@ jobs:
         with:
           name: plot-manifest
           path: .
+        continue-on-error: true
 
       - name: Download FMU figures
         uses: actions/download-artifact@v4
@@ -270,14 +281,20 @@ jobs:
         id: check-figures
         run: |
           if [ -f "plot-manifest.json" ]; then
-            COUNT=$(jq 'length' plot-manifest.json)
+            echo "Manifest file found"
+            cat plot-manifest.json
+
+            # Count entries in manifest
+            COUNT=$(jq 'length' plot-manifest.json 2>/dev/null || echo "0")
             echo "count=$COUNT" >> $GITHUB_OUTPUT
-            if [ "$COUNT" -eq 0 ]; then
-              echo "No figures to display"
-              echo "has_figures=false" >> $GITHUB_OUTPUT
-            else
+
+            # Set has_figures flag
+            if [ "$COUNT" -gt 0 ] 2>/dev/null; then
               echo "Found $COUNT figure(s) to display"
               echo "has_figures=true" >> $GITHUB_OUTPUT
+            else
+              echo "No figures to display (count=$COUNT)"
+              echo "has_figures=false" >> $GITHUB_OUTPUT
             fi
           else
             echo "No manifest found"
