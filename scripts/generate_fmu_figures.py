@@ -70,8 +70,8 @@ def create_generic_plot(fmu_path: Path, model_name: str, output_dir: Path,
         # Get output variables
         outputs = get_fmu_outputs(fmu_path)
         if not outputs:
-            if not quiet:
-                print(f"  ⚠️  No output variables found in FMU")
+            error_msg = f"No output variables found in FMU"
+            print(f"  ⚠️  {error_msg}", file=sys.stderr)
             return False
 
         # Simulate with defaults
@@ -104,8 +104,10 @@ def create_generic_plot(fmu_path: Path, model_name: str, output_dir: Path,
         return True
 
     except Exception as e:
-        if not quiet:
-            print(f"  ✗ Error: {e}")
+        # ALWAYS print errors to stderr, never suppress
+        print(f"  ✗ Error generating plot for {model_name}: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         return False
 
 
@@ -274,10 +276,10 @@ def create_configured_plot(fmu_path: Path, model_name: str, config: Dict[str, An
         return True
 
     except Exception as e:
-        if not quiet:
-            print(f"  ✗ Error: {e}")
-            import traceback
-            traceback.print_exc()
+        # ALWAYS print errors to stderr, never suppress
+        print(f"  ✗ Error generating configured plot for {model_name}: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         return False
 
 
@@ -379,13 +381,15 @@ def main():
     # Process each FMU
     results = []
     quiet_mode = args.output_manifest
+    failed_models = []
 
     for fmu_name, model_dir in sorted(models_to_plot.items()):
         fmu_path = fmu_dir / f'{fmu_name}.fmu'
 
         if not fmu_path.exists():
-            if not quiet_mode:
-                print(f"⚠️  Skipping {fmu_name}: FMU not found at {fmu_path}")
+            # ALWAYS print FMU not found warnings
+            print(f"⚠️  Skipping {fmu_name}: FMU not found at {fmu_path}", file=sys.stderr)
+            failed_models.append((fmu_name, "FMU file not found"))
             continue
 
         success = simulate_and_plot_fmu(fmu_path, model_dir, output_dir, quiet=quiet_mode)
@@ -396,6 +400,8 @@ def main():
                 'figure': f'{fmu_name}.png',
                 'model_dir': str(model_dir.relative_to(project_root))
             })
+        else:
+            failed_models.append((fmu_name, "Plot generation failed - see errors above"))
 
         if not quiet_mode:
             print()
@@ -403,18 +409,26 @@ def main():
     # Output results
     if args.output_manifest:
         print(json.dumps(results, indent=2))
+        # Also report failures to stderr
+        if failed_models:
+            print(f"\n⚠️  {len(failed_models)} model(s) failed to generate plots:", file=sys.stderr)
+            for model, reason in failed_models:
+                print(f"  - {model}: {reason}", file=sys.stderr)
     else:
         print("=" * 70)
         print(f"Summary: {len(results)}/{len(models_to_plot)} figures generated successfully")
 
-        if len(results) < len(models_to_plot):
-            failed = set(models_to_plot.keys()) - {r['model'] for r in results}
-            print(f"\nFailed: {', '.join(failed)}")
+        if failed_models:
+            print(f"\n⚠️  Failed models:")
+            for model, reason in failed_models:
+                print(f"  - {model}: {reason}")
+            print(f"\nAll figures saved to: {output_dir}")
             return 1
 
         print(f"\nAll figures saved to: {output_dir}")
 
-    return 0
+    # Return error code if any models failed (even in manifest mode)
+    return 1 if failed_models else 0
 
 
 if __name__ == '__main__':

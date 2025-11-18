@@ -206,8 +206,8 @@ jobs:
 
       - name: Generate FMU output figures
         id: generate-figures
+        continue-on-error: true  # Don't fail the workflow if plot generation fails
         run: |
-          set -e
           # Determine which models to plot
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             # For PRs, only plot models that were changed (not core files)
@@ -220,19 +220,32 @@ jobs:
             # Filter out non-model paths and convert to FMU names
             MODEL_NAMES=$(echo "$CHANGED_MODELS" | \
               jq -r '.[] | select(startswith("models/")) | split("/")[-1] | split("-") | map(. | ascii_downcase | (.[0:1] | ascii_upcase) + .[1:]) | join("")' | \
-              paste -sd, - || echo "")
+              paste -sd, - || true)
 
             if [ -z "$MODEL_NAMES" ]; then
               echo "No model directories changed in this PR"
               echo "[]" > plot-manifest.json
             else
               echo "Plotting changed models: $MODEL_NAMES"
-              python scripts/generate_fmu_figures.py --models "$MODEL_NAMES" --output-manifest > plot-manifest.json || echo "[]" > plot-manifest.json
+              # Run plot generation - errors will be printed to stderr
+              if python scripts/generate_fmu_figures.py --models "$MODEL_NAMES" --output-manifest > plot-manifest.json; then
+                echo "Plot generation completed successfully"
+              else
+                echo "::warning::Some plots failed to generate. Check stderr output above for details."
+                # Create empty manifest if none exists
+                [ -f plot-manifest.json ] || echo "[]" > plot-manifest.json
+              fi
             fi
           else
             # For main branch or non-PR events, plot all models
             echo "Plotting all models"
-            python scripts/generate_fmu_figures.py --output-manifest > plot-manifest.json || echo "[]" > plot-manifest.json
+            if python scripts/generate_fmu_figures.py --output-manifest > plot-manifest.json; then
+              echo "Plot generation completed successfully"
+            else
+              echo "::warning::Some plots failed to generate. Check stderr output above for details."
+              # Create empty manifest if none exists
+              [ -f plot-manifest.json ] || echo "[]" > plot-manifest.json
+            fi
           fi
 
           # Display manifest
