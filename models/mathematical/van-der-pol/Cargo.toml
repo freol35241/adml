@@ -1,9 +1,9 @@
 [package]
-name = "odml-van-der-pol"
+name = "adml-van-der-pol"
 version = "1.0.0"
 edition = "2021"
 description = "Van der Pol oscillator - classic nonlinear dynamical system"
-authors = ["ODML Contributors"]
+authors = ["ADML Contributors"]
 license.workspace = true
 repository.workspace = true
 

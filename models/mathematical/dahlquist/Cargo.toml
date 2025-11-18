@@ -1,9 +1,9 @@
 [package]
-name = "odml-dahlquist"
+name = "adml-dahlquist"
 version = "1.0.0"
 edition = "2021"
 description = "Dahlquist test equation: dx/dt = -k*x"
-authors = ["ODML Contributors"]
+authors = ["ADML Contributors"]
 license.workspace = true
 repository.workspace = true
 

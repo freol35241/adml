@@ -1,9 +1,9 @@
 [package]
-name = "odml-bouncing-ball"
+name = "adml-bouncing-ball"
 version = "1.0.0"
 edition = "2021"
 description = "Bouncing ball with gravity and restitution coefficient"
-authors = ["ODML Contributors"]
+authors = ["ADML Contributors"]
 license.workspace = true
 repository.workspace = true
 

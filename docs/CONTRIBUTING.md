@@ -1,4 +1,4 @@
-# Contributing to ODML - AI-Generated Model Library
+# Contributing to ADML - AI-Generated Model Library
 
 Thank you for your interest in contributing to the world's first AI-generated dynamical model library!
 

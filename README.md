@@ -1,12 +1,12 @@
-# ODML - AI-Generated Dynamical Model Library
+# ADML - AI-Generated Dynamical Model Library
 
-[![CI](https://github.com/freol35241/odml/actions/workflows/ci.yml/badge.svg)](https://github.com/freol35241/odml/actions/workflows/ci.yml)
+[![CI](https://github.com/freol35241/adml/actions/workflows/ci.yml/badge.svg)](https://github.com/freol35241/adml/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 [![AI Generated](https://img.shields.io/badge/100%25-AI%20Generated-purple.svg)](docs/AI_AGENTS.md)
 
 **The world's first library of dynamical models implemented entirely by AI agents.**
 
-ODML is a collection of high-quality, FMI 3.0 compliant dynamical models implemented in Rust, where **every model is written, tested, and documented by AI coding agents**. This project serves as both a practical library of simulation models and a demonstration of AI capabilities in scientific computing.
+ADML is a collection of high-quality, FMI 3.0 compliant dynamical models implemented in Rust, where **every model is written, tested, and documented by AI coding agents**. This project serves as both a practical library of simulation models and a demonstration of AI capabilities in scientific computing.
 
 ## 🤖 AI-Generated Code
 
@@ -21,7 +21,7 @@ See [docs/AI_AGENTS.md](docs/AI_AGENTS.md) for guidance on implementing models w
 
 ## 🎯 Purpose
 
-ODML provides:
+ADML provides:
 - **Simulation Models** - Ready-to-use FMI 3.0 FMUs for control systems, research, and education
 - **AI Capability Demonstration** - Proof that AI agents can implement scientifically correct, production-quality code
 - **Benchmark for AI Agents** - A framework for evaluating AI coding agents on scientific computing tasks
@@ -67,8 +67,8 @@ result = fmpy.simulate_fmu('Dahlquist.fmu', stop_time=5.0)
 
 ```bash
 # Clone the repository
-git clone https://github.com/freol35241/odml.git
-cd odml
+git clone https://github.com/freol35241/adml.git
+cd adml
 
 # Install FMU packaging tool
 cargo install package_fmu_after_build
@@ -94,7 +94,7 @@ pytest testing/fmu-integration-tests/ -v  # FMU integration tests
 ## 🏗️ Repository Structure
 
 ```
-odml/
+adml/
 ├── models/                        # All AI-generated dynamical models
 │   ├── mathematical/              # Mathematical test cases
 │   │   ├── dahlquist/            # Dahlquist test equation
@@ -281,8 +281,8 @@ This project is dual-licensed under:
 
 ## 📞 Contact
 
-- Issues: [GitHub Issues](https://github.com/freol35241/odml/issues)
-- Discussions: [GitHub Discussions](https://github.com/freol35241/odml/discussions)
+- Issues: [GitHub Issues](https://github.com/freol35241/adml/issues)
+- Discussions: [GitHub Discussions](https://github.com/freol35241/adml/discussions)
 - AI Agent Questions: See [docs/AI_AGENTS.md](docs/AI_AGENTS.md)
 
 ## 🗺️ Roadmap

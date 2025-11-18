@@ -3,6 +3,33 @@
 version = 4
 
 [[package]]
+name = "adml-bouncing-ball"
+version = "1.0.0"
+dependencies = [
+ "approx",
+ "fmu_from_struct",
+ "physics-framework",
+]
+
+[[package]]
+name = "adml-dahlquist"
+version = "1.0.0"
+dependencies = [
+ "approx",
+ "fmu_from_struct",
+ "physics-framework",
+]
+
+[[package]]
+name = "adml-van-der-pol"
+version = "1.0.0"
+dependencies = [
+ "approx",
+ "fmu_from_struct",
+ "physics-framework",
+]
+
+[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -85,33 +112,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "odml-bouncing-ball"
-version = "1.0.0"
-dependencies = [
- "approx",
- "fmu_from_struct",
- "physics-framework",
-]
-
-[[package]]
-name = "odml-dahlquist"
-version = "1.0.0"
-dependencies = [
- "approx",
- "fmu_from_struct",
- "physics-framework",
-]
-
-[[package]]
-name = "odml-van-der-pol"
-version = "1.0.0"
-dependencies = [
- "approx",
- "fmu_from_struct",
- "physics-framework",
 ]
 
 [[package]]

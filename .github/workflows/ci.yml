@@ -225,7 +225,7 @@ jobs:
 
       - name: Create index redirect
         run: |
-          echo '<meta http-equiv="refresh" content="0; url=odml_dahlquist/index.html">' > target/doc/index.html
+          echo '<meta http-equiv="refresh" content="0; url=adml_dahlquist/index.html">' > target/doc/index.html
 
       - name: Deploy to GitHub Pages
         if: github.ref == 'refs/heads/main'

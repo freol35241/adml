@@ -1,7 +1,7 @@
 //! Physics validation tests for the Dahlquist model
 
+use adml_dahlquist::Dahlquist;
 use approx::assert_relative_eq;
-use odml_dahlquist::Dahlquist;
 
 #[test]
 fn test_analytical_solution() {

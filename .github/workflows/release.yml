@@ -90,7 +90,7 @@ jobs:
       - name: Generate release notes
         run: |
           cat > release-notes.md << 'EOF'
-          # ODML - Open Dynamical Model Library
+          # ADML - AI-Generated Dynamical Model Library
 
           FMI 3.0 compatible FMU files ready to use in any FMI-supporting simulation tool.
 

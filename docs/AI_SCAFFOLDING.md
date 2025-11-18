@@ -30,7 +30,7 @@ touch models/category/model-name/README.md
 
 ```toml
 [package]
-name = "odml-model-name"        # Use lowercase with hyphens
+name = "adml-model-name"        # Use lowercase with hyphens
 version = "1.0.0"
 edition = "2021"
 description = "Brief description of your model"
@@ -307,7 +307,7 @@ mod tests {
 //! and known physical properties.
 
 use approx::assert_relative_eq;
-use odml_model_name::{FmuFunctions, ModelName};
+use adml_model_name::{FmuFunctions, ModelName};
 
 // === Analytical Solution Tests ===
 

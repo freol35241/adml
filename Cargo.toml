@@ -15,7 +15,7 @@ exclude = [
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/freol35241/odml"
+repository = "https://github.com/freol35241/adml"
 
 [workspace.dependencies]
 # FMI export dependencies - using fmu_from_struct temporarily

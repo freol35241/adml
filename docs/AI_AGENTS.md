@@ -233,8 +233,8 @@ Always set `output_interval = step_size` and downsample results if needed. See `
 
 **Problem:**
 ```bash
-# build-fmu.sh creates directory "odml-dahlquist" (hyphen)
-# But package_fmu_after_build expects "odml_dahlquist" (underscore)
+# build-fmu.sh creates directory "adml-dahlquist" (hyphen)
+# But package_fmu_after_build expects "adml_dahlquist" (underscore)
 ```
 
 **Solution:**
@@ -607,8 +607,8 @@ pub k: f64,
 ### Useful Commands
 ```bash
 # Build and test model
-cargo build -p odml-model-name
-cargo test -p odml-model-name
+cargo build -p adml-model-name
+cargo test -p adml-model-name
 
 # Build FMU
 ./scripts/build-fmu.sh models/category/model-name
