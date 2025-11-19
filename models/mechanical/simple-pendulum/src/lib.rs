@@ -23,6 +23,13 @@
 //! For small angles (θ << 1 rad), sin(θ) ≈ θ, yielding a linear system with
 //! analytical solutions. The undamped natural frequency is ω₀ = sqrt(g/L).
 //!
+//! # Numerical Integration
+//!
+//! Uses symplectic Euler (semi-implicit Euler) integration, which:
+//! - Conserves energy for undamped systems
+//! - Provides excellent long-term stability for oscillatory dynamics
+//! - Has the same computational cost as forward Euler
+//!
 //! # Features
 //!
 //! - Nonlinear dynamics (full sin(θ) term)
@@ -103,13 +110,14 @@ impl FmuFunctions for SimplePendulum {
     }
 
     fn do_step(&mut self, _current_time: f64, time_step: f64) {
-        // Calculate derivatives
-        let der_theta = self.omega;
+        // Calculate angular acceleration
         let der_omega = -(self.g / self.L) * self.theta.sin() - (self.b / self.m) * self.omega;
 
-        // Euler integration
-        self.theta += der_theta * time_step;
+        // Symplectic Euler integration (semi-implicit Euler)
+        // Update velocity first using current position
         self.omega += der_omega * time_step;
+        // Then update position using NEW velocity (this is the key difference)
+        self.theta += self.omega * time_step;
 
         // Update derived outputs after integration
         self.update_derived_outputs();
