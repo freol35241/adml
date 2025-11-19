@@ -168,13 +168,7 @@ impl SimplePendulum {
     ///
     /// # Returns
     /// Tuple of (theta, omega) at time t
-    pub fn analytical_solution(
-        theta_0: f64,
-        omega_0: f64,
-        g: f64,
-        L: f64,
-        t: f64,
-    ) -> (f64, f64) {
+    pub fn analytical_solution(theta_0: f64, omega_0: f64, g: f64, L: f64, t: f64) -> (f64, f64) {
         let omega_n = (g / L).sqrt(); // Natural frequency
         let theta = theta_0 * (omega_n * t).cos() + (omega_0 / omega_n) * (omega_n * t).sin();
         let omega = -theta_0 * omega_n * (omega_n * t).sin() + omega_0 * (omega_n * t).cos();

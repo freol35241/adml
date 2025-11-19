@@ -1,4 +1,4 @@
-use adml_simple_pendulum::{SimplePendulum, FmuFunctions};
+use adml_simple_pendulum::{FmuFunctions, SimplePendulum};
 use approx::assert_relative_eq;
 
 /// Test that small-angle pendulum matches analytical solution
