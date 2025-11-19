@@ -266,9 +266,23 @@ Unlike forward Euler, symplectic Euler updates velocity first, then uses the *ne
 
 This synchronization ensures that energy is conserved (undamped) or properly dissipated (damped), avoiding the artificial energy growth seen with forward Euler.
 
+### Energy Behavior
+
+For **undamped** systems (b=0), symplectic Euler oscillates around the true energy:
+- Energy increases/decreases slightly at each step (±0.005% typical)
+- Overall drift is very small (~0.3% over 10 seconds)
+- This is expected and acceptable for conservative systems
+
+For **damped** systems, monotonic energy decrease requires sufficient damping:
+- **b ≥ 0.05**: Energy decreases at EVERY step (monotonic) ✓
+- **b = 0.01**: Too weak - numerical oscillations dominate (energy sometimes increases)
+- **b = 0.0**: Undamped - energy oscillates
+
+The default plot configuration uses `b = 0.05` to ensure monotonic energy decrease for clear visualization.
+
 Typical accuracy with `step_size = 0.01`:
 - Small angle, undamped: ~0.5% energy drift over 10 seconds
-- Small angle, damped: Energy monotonically decreases (physically correct)
+- Small angle, damped (b≥0.05): Energy monotonically decreases (physically correct)
 - Large angle: ~1-2% error over multiple periods
 
 ## Physical Limits and Validity

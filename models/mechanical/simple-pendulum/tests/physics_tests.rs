@@ -174,6 +174,33 @@ fn test_damping_reduces_energy() {
     );
 }
 
+/// Test that sufficient damping ensures monotonic energy decrease
+#[test]
+fn test_monotonic_energy_decrease_with_sufficient_damping() {
+    let mut pendulum = SimplePendulum::new();
+    pendulum.theta = 0.2;
+    pendulum.omega = 0.0;
+    pendulum.b = 0.05; // Threshold for monotonic decrease
+    pendulum.update_derived_outputs();
+
+    let dt = 0.01;
+    let mut prev_energy = pendulum.energy;
+
+    // Check that energy decreases at EVERY step
+    for _ in 0..1000 {
+        pendulum.do_step(0.0, dt);
+
+        assert!(
+            pendulum.energy <= prev_energy,
+            "Energy should monotonically decrease with b>=0.05, but increased from {} to {}",
+            prev_energy,
+            pendulum.energy
+        );
+
+        prev_energy = pendulum.energy;
+    }
+}
+
 /// Test large amplitude behavior (nonlinear effects)
 #[test]
 fn test_large_amplitude() {
