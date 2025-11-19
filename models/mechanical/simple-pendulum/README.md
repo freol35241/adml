@@ -253,13 +253,14 @@ The quality factor Q ≈ `m * ω_n / b` characterizes damping:
 This model uses forward Euler integration, which:
 - Is simple and fast
 - Has 1st-order accuracy: error ∝ Δt
-- May not exactly conserve energy (small drift over time)
+- **Is not symplectic**: does not conserve energy for undamped systems
 
-For better energy conservation or higher accuracy, use:
-- Smaller time steps (e.g., `step_size = 0.001`)
-- Higher-order integration methods (if supported by your FMU simulator)
+**Important**: Forward Euler can cause energy to **increase** over time for undamped oscillatory systems, as it's not a symplectic integrator. This is a well-known numerical artifact. For physically realistic simulations, we recommend:
+- Using light damping (e.g., `b = 0.05`) to stabilize the simulation
+- Using smaller time steps (e.g., `step_size = 0.001`)
+- Using symplectic integrators (e.g., Verlet, RK4) if supported by your FMU simulator
 
-Typical accuracy with `step_size = 0.01`:
+Typical accuracy with `step_size = 0.01` and light damping:
 - Small angle: ~2-5% error over multiple periods
 - Large angle: ~5-10% error over multiple periods
 
