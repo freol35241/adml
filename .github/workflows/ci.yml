@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+  schedule:
+    # Run weekly on Monday at 6:00 UTC to catch dependency issues and bit rot
+    - cron: '0 6 * * 1'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -91,13 +94,15 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Workspace format check
         run: cargo fmt --all -- --check
@@ -125,13 +130,16 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ matrix.model }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.model }}-
+            ${{ runner.os }}-cargo-
 
       - name: Extract model info
         id: info
@@ -169,7 +177,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -184,13 +192,16 @@ jobs:
           cargo install package_fmu_after_build
 
       - name: Cache cargo
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-fmu-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-fmu-
+            ${{ runner.os }}-cargo-
 
       - name: Build all FMUs
         run: |
@@ -451,13 +462,16 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-docs-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-docs-
+            ${{ runner.os }}-cargo-
 
       - name: Build documentation
         run: cargo doc --workspace --no-deps
@@ -473,9 +487,62 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./target/doc
 
+  # FMI 3.0 Compliance Check
+  fmi-compliance:
+    needs: [fmu-integration]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download FMU artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: fmus
+          path: fmus/
+
+      - name: List FMUs to check
+        run: |
+          echo "FMUs to check for FMI compliance:"
+          ls -lh fmus/*.fmu
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+
+      - name: Check FMI Compliance for all FMUs
+        run: |
+          # Track overall result
+          OVERALL_RESULT=0
+
+          for fmu in fmus/*.fmu; do
+            echo ""
+            echo "=========================================="
+            echo "Checking: $(basename $fmu)"
+            echo "=========================================="
+
+            if ./scripts/check-fmu-compliance.sh "$fmu"; then
+              echo "✅ $(basename $fmu) PASSED"
+            else
+              echo "❌ $(basename $fmu) FAILED"
+              OVERALL_RESULT=1
+            fi
+          done
+
+          exit $OVERALL_RESULT
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## FMI Compliance Check Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for fmu in fmus/*.fmu; do
+            echo "- \`$(basename $fmu)\` - Checked" >> $GITHUB_STEP_SUMMARY
+          done
+
   # Final status check
   ci-success:
-    needs: [workspace-check, test-models, fmu-integration, pr-figures, docs]
+    needs: [workspace-check, test-models, fmu-integration, pr-figures, docs, fmi-compliance]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -485,8 +552,9 @@ jobs:
              [[ "${{ needs.test-models.result }}" != "success" && "${{ needs.test-models.result }}" != "skipped" ]] || \
              [[ "${{ needs.fmu-integration.result }}" != "success" ]] || \
              [[ "${{ needs.pr-figures.result }}" != "success" && "${{ needs.pr-figures.result }}" != "skipped" ]] || \
-             [[ "${{ needs.docs.result }}" != "success" ]]; then
+             [[ "${{ needs.docs.result }}" != "success" ]] || \
+             [[ "${{ needs.fmi-compliance.result }}" != "success" ]]; then
             echo "CI failed"
             exit 1
           fi
-          echo "✅ All CI checks passed"
+          echo "All CI checks passed"

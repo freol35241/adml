@@ -1,0 +1,70 @@
+# Configuration for the actions/labeler workflow
+# Labels PRs based on the files changed
+
+# Documentation changes
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '*.md'
+          - 'docs/**'
+          - 'AGENTS.md'
+          - 'CLAUDE.md'
+
+# CI/CD and GitHub configuration
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**'
+          - 'scripts/**'
+
+# Testing infrastructure
+testing:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'testing/**'
+          - '**/tests/**'
+          - '**/*_test.rs'
+          - '**/*_tests.rs'
+
+# Mathematical models
+model:mathematical:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'models/mathematical/**'
+
+# Mechanical models
+model:mechanical:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'models/mechanical/**'
+
+# Thermal models
+model:thermal:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'models/thermal/**'
+
+# Rust code changes
+rust:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.rs'
+          - '**/Cargo.toml'
+          - '**/Cargo.lock'
+
+# Python code changes
+python:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.py'
+          - '**/requirements.txt'
+
+# FMU-related changes
+fmu:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'scripts/build-fmu.sh'
+          - 'scripts/build-all-fmus.sh'
+          - 'scripts/build-multiplatform-fmu.sh'
+          - 'scripts/check-fmu-compliance.sh'
+          - '**/plot_config.toml'
