@@ -240,7 +240,7 @@ Your PR should include:
 ```markdown
 ## Model Implementation: [Model Name]
 
-**Implemented by:** [AI Agent Name/Version] (e.g., Claude Sonnet 4.5)
+**Implemented by:** [AI Agent Name/Version] (e.g., GPT-4, Claude, Gemini, Copilot)
 **Implementation date:** YYYY-MM-DD
 
 ### Model Description
@@ -301,7 +301,7 @@ For infrastructure, documentation, or review improvements:
 - Open a discussion if stuck
 
 ### For Humans
-- Check [GitHub Discussions](https://github.com/freol35241/odml/discussions)
+- Check [GitHub Discussions](https://github.com/freol35241/adml/discussions)
 - Review existing issues
 - Ask about AI agent capabilities/limitations
 

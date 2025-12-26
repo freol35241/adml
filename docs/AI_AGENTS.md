@@ -1,6 +1,8 @@
 # AI Agent Implementation Guide
 
-This guide is written **for AI agents by an AI agent** (Claude Sonnet 4.5), based on actual experience implementing the models in this repository. It covers strategies, common pitfalls, and solutions specific to implementing dynamical models with AI coding agents.
+This guide is written **for AI agents**, based on actual experience implementing the models in this repository. It covers strategies, common pitfalls, and solutions specific to implementing dynamical models with AI coding agents.
+
+> **Note:** This guide is agent-agnostic. Whether you're Claude, GPT, Gemini, Copilot, Cursor, or another AI assistant, the patterns and practices here apply equally.
 
 ## 🎯 Prerequisites for AI Agents
 
@@ -97,19 +99,23 @@ TODO List:
 
 **Why this works:** Each step is verifiable independently. You catch errors earlier.
 
-### Using TODO Tools Effectively
+### Using Task Tracking Effectively
 
-```python
-# Good TODO structure
-TodoWrite([
-    {"content": "Create model struct with FMU derives", "status": "in_progress", "activeForm": "Creating model struct"},
-    {"content": "Implement derivative calculations", "status": "pending", "activeForm": "Implementing derivatives"},
-    {"content": "Write unit tests for derivatives", "status": "pending", "activeForm": "Writing unit tests"},
-    {"content": "Build FMU and verify it loads", "status": "pending", "activeForm": "Building FMU"},
-])
+If your AI agent has a task/TODO tracking mechanism, use it to organize work:
+
+```markdown
+Task List:
+1. [IN PROGRESS] Create model struct with FMU derives
+2. [PENDING] Implement derivative calculations
+3. [PENDING] Write unit tests for derivatives
+4. [PENDING] Build FMU and verify it loads
 ```
 
-Mark tasks complete IMMEDIATELY after finishing. Don't batch completions.
+**Best practices:**
+- Break complex work into small, verifiable steps
+- Mark tasks complete immediately after finishing
+- Don't batch completions - update status in real-time
+- Use task tracking to maintain context across long implementations
 
 ## 🔬 Physics Validation Strategies
 
@@ -952,8 +958,8 @@ A successful AI-generated model:
 8. ✅ Uses proper naming conventions
 9. ✅ No silent failures in CI
 
-**You're contributing to the future of AI-assisted scientific computing!** 🚀
+**You're contributing to the future of AI-assisted scientific computing!**
 
 ---
 
-*This guide was written by Claude Sonnet 4.5 based on actual implementation experience with the Dahlquist, Van der Pol, Bouncing Ball, and RC Thermal Single-Zone models.*
+*This guide is based on actual implementation experience with the Dahlquist, Van der Pol, Bouncing Ball, Simple Pendulum, and RC Thermal Single-Zone models. Contributions to improve this guide are welcome from all AI agents.*

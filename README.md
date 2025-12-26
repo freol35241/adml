@@ -40,22 +40,29 @@ All models are:
 
 ### Mathematical Models
 
-| Model | Description | Version | AI Agent |
-|-------|-------------|---------|----------|
-| [Dahlquist](models/mathematical/dahlquist/) | Simple ODE test equation: dx/dt = -k·x | 1.0.0 | Claude Sonnet 4.5 |
-| [Van der Pol](models/mathematical/van-der-pol/) | Nonlinear oscillator with limit cycle | 1.0.0 | Claude Sonnet 4.5 |
+| Model | Description | Version | AI Generated |
+|-------|-------------|---------|--------------|
+| [Dahlquist](models/mathematical/dahlquist/) | Simple ODE test equation: dx/dt = -k·x | 1.0.0 | Yes |
+| [Van der Pol](models/mathematical/van-der-pol/) | Nonlinear oscillator with limit cycle | 1.0.0 | Yes |
 
 ### Mechanical Models
 
-| Model | Description | Version | AI Agent |
-|-------|-------------|---------|----------|
-| [Bouncing Ball](models/mechanical/bouncing-ball/) | Ball with gravity and elastic collisions | 1.0.0 | Claude Sonnet 4.5 |
+| Model | Description | Version | AI Generated |
+|-------|-------------|---------|--------------|
+| [Bouncing Ball](models/mechanical/bouncing-ball/) | Ball with gravity and elastic collisions | 1.0.0 | Yes |
+| [Simple Pendulum](models/mechanical/simple-pendulum/) | Classical pendulum with nonlinear dynamics | 1.0.0 | Yes |
+
+### Thermal Models
+
+| Model | Description | Version | AI Generated |
+|-------|-------------|---------|--------------|
+| [RC Thermal Single Zone](models/thermal/rc-thermal-single-zone/) | Single-zone thermal model using RC analogy | 1.0.0 | Yes |
 
 ## 🚀 Quick Start
 
 ### Using Pre-built FMU Files
 
-Download FMU files from the [Releases page](https://github.com/freol35241/odml/releases) and use them directly in any FMI 3.0 compatible tool:
+Download FMU files from the [Releases page](https://github.com/freol35241/adml/releases) and use them directly in any FMI 3.0 compatible tool:
 
 ```python
 # Example with FMPy
@@ -277,7 +284,7 @@ This project is dual-licensed under:
 
 - Models inspired by [Modelica Reference-FMUs](https://github.com/modelica/Reference-FMUs)
 - FMI bindings via [`fmu_from_struct`](https://github.com/jarlekramer/fmu_from_struct) by Jarle Kramer
-- All model implementations by AI coding agents (Claude Sonnet 4.5)
+- All model implementations by AI coding agents
 
 ## 📞 Contact
 
@@ -294,9 +301,9 @@ This project is dual-licensed under:
 - [x] ✅ Complete CI/CD pipeline
 
 **Coming Soon:**
-- [ ] More mathematical models (Lorenz attractor, pendulum)
+- [ ] More mathematical models (Lorenz attractor, double pendulum)
 - [ ] Electrical models (RC circuits, motors)
-- [ ] Thermal models (heat exchangers)
+- [ ] More thermal models (heat exchangers, multi-zone)
 - [ ] Hydraulic models
 - [ ] Multi-agent collaboration (different AI agents on same model)
 - [ ] AI agent benchmarking framework
