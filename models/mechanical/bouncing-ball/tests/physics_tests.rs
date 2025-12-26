@@ -64,6 +64,7 @@ fn test_energy_loss_per_bounce() {
 #[test]
 fn test_stopping_condition() {
     let mut model = BouncingBall::new();
+    let original_g = model.g;
 
     // Set velocity below threshold
     model.h = 0.0;
@@ -73,7 +74,8 @@ fn test_stopping_condition() {
 
     // Ball should have stopped
     assert_eq!(model.v, 0.0);
-    assert_eq!(model.g, 0.0); // Gravity disabled
+    assert!(model.is_stopped()); // Ball is at rest
+    assert_eq!(model.g, original_g); // Gravity parameter unchanged
 }
 
 #[test]
@@ -114,6 +116,7 @@ fn test_free_fall_acceleration() {
 #[test]
 fn test_multiple_bounces() {
     let mut model = BouncingBall::new();
+    let original_g = model.g;
     model.h = 1.0;
     model.v = 0.0;
 
@@ -131,7 +134,7 @@ fn test_multiple_bounces() {
         }
 
         // Stop if ball has stopped bouncing
-        if model.g == 0.0 {
+        if model.is_stopped() {
             break;
         }
     }
@@ -141,5 +144,9 @@ fn test_multiple_bounces() {
 
     // Ball should have stopped eventually
     assert_eq!(model.v, 0.0, "Ball should eventually stop");
-    assert_eq!(model.g, 0.0, "Gravity should be disabled when stopped");
+    assert!(model.is_stopped(), "Ball should be at rest when stopped");
+    assert_eq!(
+        model.g, original_g,
+        "Gravity parameter should remain unchanged"
+    );
 }
