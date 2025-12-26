@@ -1,0 +1,164 @@
+# Model Specification: Bouncing Ball
+# This file provides a machine-readable specification of the model.
+
+[model]
+name = "BouncingBall"
+struct_name = "BouncingBall"
+package = "adml-bouncing-ball"
+version = "1.0.0"
+category = "mechanical"
+complexity = "advanced"
+description = "Ball falling under gravity with elastic collisions at ground level"
+fmi_version = "3.0"
+
+[equations]
+system_type = "hybrid"  # Continuous dynamics with discrete events
+linearity = "linear"    # Between events
+autonomy = "autonomous"
+
+[[equations.differential]]
+state = "h"
+derivative = "v"
+description = "Height changes at velocity"
+
+[[equations.differential]]
+state = "v"
+derivative = "g"
+description = "Velocity changes at gravitational acceleration"
+
+[[equations.events]]
+name = "ground_collision"
+condition = "h <= 0 and v < 0"
+action = "v = -e * v"
+description = "Velocity reversal with energy loss on ground impact"
+
+[[equations.events]]
+name = "stop_bouncing"
+condition = "abs(v) < v_min"
+action = "v = 0, g_effective = 0"
+description = "Ball stops when velocity drops below threshold"
+
+[equations.analytical_solution]
+available = true
+formula = "h(t) = h0 + v0*t + 0.5*g*t^2 (between bounces)"
+valid_for = "Free fall phase only; bounces require event handling"
+
+[parameters]
+[parameters.g]
+type = "Real"
+default = -9.81
+unit = "m/s^2"
+description = "Gravitational acceleration (negative = downward)"
+constraints = "g < 0"
+fmi_causality = "parameter"
+
+[parameters.e]
+type = "Real"
+default = 0.7
+unit = "1"
+description = "Coefficient of restitution (energy retention per bounce)"
+constraints = "0 < e <= 1"
+fmi_causality = "parameter"
+
+[parameters.v_min]
+type = "Real"
+default = 0.1
+unit = "m/s"
+description = "Minimum velocity threshold for stopping"
+constraints = "v_min > 0"
+fmi_causality = "parameter"
+
+[initial_conditions]
+[initial_conditions.h]
+type = "Real"
+default = 1.0
+unit = "m"
+description = "Initial height above ground"
+fmi_causality = "output"
+
+[initial_conditions.v]
+type = "Real"
+default = 0.0
+unit = "m/s"
+description = "Initial vertical velocity"
+fmi_causality = "output"
+
+[outputs]
+[outputs.h]
+type = "Real"
+unit = "m"
+description = "Current height above ground"
+
+[outputs.v]
+type = "Real"
+unit = "m/s"
+description = "Current vertical velocity"
+
+[validation]
+[validation.analytical]
+method = "free_fall_verification"
+notes = "Compare to h(t) = h0 + v0*t + 0.5*g*t^2 during fall"
+
+[[validation.analytical.checkpoints]]
+time = 0.0
+variable = "h"
+expected = 1.0
+tolerance = 1e-10
+description = "Initial height"
+
+[[validation.analytical.checkpoints]]
+time = 0.45  # Approximate time to hit ground from h=1, v=0
+variable = "h"
+expected = 0.0
+tolerance = 0.1
+description = "First ground impact"
+
+[validation.energy]
+method = "energy_ratio_per_bounce"
+expected_ratio = 0.49  # e^2 = 0.7^2
+tolerance = 0.05
+notes = "Kinetic energy should decrease by factor of e^2 per bounce"
+
+[validation.convergence]
+method = "step_size_refinement"
+step_sizes = [0.01, 0.001, 0.0001]
+expected_order = 1
+error_should_decrease = true
+notes = "Smaller steps needed for accurate event detection"
+
+[validation.properties]
+has_events = true
+energy_dissipative = true
+eventually_stops = true
+height_always_non_negative = true
+
+[testing]
+required = [
+    "initialization",
+    "free_fall_dynamics",
+    "collision_detection",
+    "energy_loss_per_bounce",
+    "eventual_stopping",
+    "parameter_sensitivity"
+]
+
+euler_step_size = 0.001  # Small step for event detection
+simulation_tolerance = 0.05
+
+[testing.edge_cases]
+elastic_collision = { e = 1.0, notes = "Energy conserved, bounces forever" }
+inelastic_collision = { e = 0.1, notes = "Stops quickly" }
+high_drop = { h = 10.0, notes = "More bounces before stopping" }
+initial_velocity = { v = 5.0, notes = "Ball thrown upward" }
+
+[references]
+[[references.sources]]
+type = "standard"
+name = "Modelica Reference-FMUs"
+url = "https://github.com/modelica/Reference-FMUs"
+notes = "Standard FMU test model"
+
+[[references.sources]]
+type = "physics"
+name = "Classical Mechanics"
+notes = "Standard bouncing ball problem from introductory physics"

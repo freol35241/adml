@@ -1,0 +1,43 @@
+# Cursor AI Rules for ADML
+
+## Project Context
+ADML is the AI-Generated Dynamical Model Library - a collection of FMI 3.0 compliant dynamical models implemented entirely by AI agents.
+
+## Key Files
+- `AGENTS.md` - Quick reference for AI agents
+- `docs/AI_QUICK_START.md` - Step-by-step guide
+- `docs/AI_AGENTS.md` - Comprehensive implementation guide
+- `docs/AI_SCAFFOLDING.md` - Copy-paste templates
+- `docs/ERROR_CATALOG.md` - Error solutions
+
+## Critical Conventions
+
+### Naming
+- Struct name: CamelCase from directory (my-model → MyModel)
+- Package name: adml-{model-name} (lowercase with hyphens)
+
+### FMI Variables
+- `#[fmu_from_struct(parameter)]` - Can be set before simulation
+- `#[fmu_from_struct(output)]` - Appears in simulation results
+
+### Integration
+- Use Euler with step_size ≤ 0.01
+- Tolerance 5% for short simulations, 10-25% for long
+
+## Required Imports
+```rust
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::ptr_offset_with_cast)]
+pub use fmu_from_struct::prelude::*;
+```
+
+## Commands
+- `cargo test -p adml-{model}` - Test single model
+- `./scripts/build-fmu.sh models/{category}/{model}` - Build FMU
+- `cargo fmt && cargo clippy` - Format and lint
+
+## Don't Forget
+1. Add model to workspace in root Cargo.toml
+2. Struct name must match directory pattern exactly
+3. Only outputs appear in simulation results
+4. Use small step sizes for Euler accuracy

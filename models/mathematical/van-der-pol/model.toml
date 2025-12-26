@@ -1,0 +1,121 @@
+# Model Specification: Van der Pol Oscillator
+# This file provides a machine-readable specification of the model.
+
+[model]
+name = "VanDerPol"
+struct_name = "VanDerPol"
+package = "adml-van-der-pol"
+version = "1.0.0"
+category = "mathematical"
+complexity = "medium"
+description = "Classic nonlinear oscillator exhibiting self-sustained oscillations and limit cycle behavior"
+fmi_version = "3.0"
+
+[equations]
+system_type = "ode"
+linearity = "nonlinear"
+autonomy = "autonomous"
+
+[[equations.differential]]
+state = "x0"
+derivative = "x1"
+description = "Position-like state, velocity is x1"
+
+[[equations.differential]]
+state = "x1"
+derivative = "mu * (1 - x0^2) * x1 - x0"
+description = "Velocity-like state with nonlinear damping"
+
+[equations.analytical_solution]
+available = false
+notes = "No closed-form solution; limit cycle behavior requires numerical analysis"
+
+[parameters]
+[parameters.mu]
+type = "Real"
+default = 1.0
+unit = "1"
+description = "Damping parameter controlling oscillation shape"
+constraints = "mu > 0 for stable limit cycle"
+fmi_causality = "parameter"
+
+[initial_conditions]
+[initial_conditions.x0]
+type = "Real"
+default = 2.0
+unit = "1"
+description = "Initial position-like state"
+fmi_causality = "output"
+
+[initial_conditions.x1]
+type = "Real"
+default = 0.0
+unit = "1"
+description = "Initial velocity-like state"
+fmi_causality = "output"
+
+[outputs]
+[outputs.x0]
+type = "Real"
+unit = "1"
+description = "Position-like state variable"
+
+[outputs.x1]
+type = "Real"
+unit = "1"
+description = "Velocity-like state variable"
+
+[validation]
+[validation.properties]
+has_limit_cycle = true
+limit_cycle_amplitude_x0 = 2.0  # Approximate
+oscillation_period_small_mu = 6.28  # Approximately 2*pi for mu << 1
+bounded_energy = true
+
+[validation.convergence]
+method = "step_size_refinement"
+step_sizes = [0.1, 0.01, 0.001]
+expected_order = 1
+error_should_decrease = true
+
+[validation.stability]
+method = "limit_cycle_convergence"
+simulation_time = 50.0
+should_converge_to_limit_cycle = true
+limit_cycle_amplitude_tolerance = 0.5
+
+[validation.symmetry]
+# Van der Pol has symmetry: if (x0, x1) is a solution, so is (-x0, -x1)
+has_point_symmetry = true
+symmetry_center = [0.0, 0.0]
+
+[testing]
+required = [
+    "initialization",
+    "derivative_calculation",
+    "limit_cycle_convergence",
+    "symmetry",
+    "parameter_sensitivity"
+]
+
+euler_step_size = 0.01
+simulation_tolerance = 0.10
+
+[testing.edge_cases]
+small_mu = { mu = 0.1, notes = "Nearly sinusoidal oscillations" }
+large_mu = { mu = 5.0, notes = "Relaxation oscillations, use smaller step" }
+zero_initial = { x0 = 0.0, x1 = 0.0, expected_behavior = "unstable_equilibrium" }
+
+[references]
+[[references.sources]]
+type = "historical"
+author = "B. van der Pol"
+title = "On relaxation-oscillations"
+year = 1926
+notes = "Original paper describing the oscillator"
+
+[[references.sources]]
+type = "textbook"
+name = "Nonlinear Dynamics and Chaos"
+author = "Steven Strogatz"
+notes = "Comprehensive treatment of Van der Pol dynamics"

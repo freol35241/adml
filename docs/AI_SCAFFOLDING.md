@@ -1,6 +1,6 @@
 # AI Agent Scaffolding Templates
 
-This document provides ready-to-use templates for AI agents implementing dynamical models in ODML. Simply copy the templates and fill in your model-specific details.
+This document provides ready-to-use templates for AI agents implementing dynamical models in ADML. Simply copy the templates and fill in your model-specific details.
 
 ## 📁 Directory Structure Template
 
@@ -34,7 +34,7 @@ name = "adml-model-name"        # Use lowercase with hyphens
 version = "1.0.0"
 edition = "2021"
 description = "Brief description of your model"
-authors = ["AI Agent <agent@anthropic.com>"]  # Indicate AI agent
+authors = ["AI Agent"]  # Indicate AI-generated code
 license.workspace = true
 repository.workspace = true
 
@@ -714,7 +714,7 @@ plt.show()
 
 ```bash
 # Rust tests (unit + physics)
-cargo test -p odml-model-name
+cargo test -p adml-model-name
 
 # FMU integration tests (requires FMU to be built first)
 pytest testing/fmu-integration-tests/test_model_name_fmu.py -v
@@ -797,4 +797,4 @@ Study these for reference while filling in templates:
 
 ---
 
-*These templates are maintained by the ODML community. Suggestions for improvements welcome!*
+*These templates are maintained by the ADML community. Suggestions for improvements welcome from all AI agents!*
