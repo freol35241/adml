@@ -18,69 +18,98 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Detect which models have changed
+  # Detect which models have changed and determine test scope
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      models: ${{ steps.filter.outputs.models }}
-      test-all: ${{ steps.check.outputs.test-all }}
+      # JSON array of model directory paths to test (e.g., ["models/mathematical/dahlquist"])
+      models: ${{ steps.determine.outputs.models }}
+      # JSON array of FMU names for plotting (e.g., ["Dahlquist", "VanDerPol"])
+      fmu-names: ${{ steps.determine.outputs.fmu-names }}
+      # Whether to run full test suite (true) or incremental (false)
+      test-all: ${{ steps.determine.outputs.test-all }}
+      # Whether any models need testing
+      has-models: ${{ steps.determine.outputs.has-models }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Need full history for PR diffs
+          fetch-depth: 0
 
-      - name: Check if should test all models
-        id: check
+      - name: Determine test scope
+        id: determine
         run: |
-          # Test all models on main branch or if core files changed
+          # Determine if we should test all models
+          TEST_ALL=false
+
+          # Always test all on main branch
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "test-all=true" >> $GITHUB_OUTPUT
-            echo "Testing all models (main branch)"
-            exit 0
-          fi
-
-          # For PRs, compare against base branch
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            DIFF_RANGE="$BASE_SHA...HEAD"
+            TEST_ALL=true
+            echo "Mode: main branch - testing all models"
+          # Always test all on scheduled runs
+          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+            TEST_ALL=true
+            echo "Mode: scheduled run - testing all models"
+          # For PRs and pushes, check what changed
           else
-            DIFF_RANGE="HEAD~1 HEAD"
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              BASE_SHA="${{ github.event.pull_request.base.sha }}"
+              DIFF_RANGE="$BASE_SHA...HEAD"
+            else
+              DIFF_RANGE="HEAD~1..HEAD"
+            fi
+
+            echo "Checking changes in range: $DIFF_RANGE"
+            CHANGED_FILES=$(git diff --name-only $DIFF_RANGE)
+
+            # Check for core file changes that affect all models
+            if echo "$CHANGED_FILES" | grep -qE "^(Cargo\.toml|Cargo\.lock|testing/|scripts/|\.github/)"; then
+              TEST_ALL=true
+              echo "Mode: core files changed - testing all models"
+            else
+              echo "Mode: incremental - testing only changed models"
+            fi
           fi
 
-          # Check for core file changes
-          if git diff --name-only $DIFF_RANGE | grep -E "(Cargo.toml|testing/|scripts/|\.github/)"; then
-            echo "test-all=true" >> $GITHUB_OUTPUT
-            echo "Testing all models (core files changed)"
+          echo "test-all=$TEST_ALL" >> $GITHUB_OUTPUT
+
+          # Get list of models to test
+          if [[ "$TEST_ALL" == "true" ]]; then
+            # Find all model directories
+            MODELS=$(find models -mindepth 2 -maxdepth 2 -type d -name '[!.]*' 2>/dev/null | sort)
           else
-            echo "test-all=false" >> $GITHUB_OUTPUT
-            echo "Testing only changed models"
+            # Find only changed model directories
+            MODELS=$(echo "$CHANGED_FILES" | grep "^models/" | cut -d/ -f1-3 | sort -u | while read dir; do
+              # Verify it's actually a model directory (has Cargo.toml)
+              if [[ -d "$dir" && -f "$dir/Cargo.toml" ]]; then
+                echo "$dir"
+              fi
+            done)
           fi
 
-      - name: Find changed models
-        id: filter
-        run: |
-          # Determine diff range
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            DIFF_RANGE="$BASE_SHA...HEAD"
-            echo "Comparing PR against base: $DIFF_RANGE"
+          # Convert to JSON array for matrix
+          if [[ -z "$MODELS" ]]; then
+            echo "models=[]" >> $GITHUB_OUTPUT
+            echo "fmu-names=[]" >> $GITHUB_OUTPUT
+            echo "has-models=false" >> $GITHUB_OUTPUT
+            echo "No models to test"
           else
-            DIFF_RANGE="HEAD~1 HEAD"
-            echo "Comparing last two commits: $DIFF_RANGE"
-          fi
+            MODELS_JSON=$(echo "$MODELS" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            echo "models=$MODELS_JSON" >> $GITHUB_OUTPUT
+            echo "has-models=true" >> $GITHUB_OUTPUT
 
-          if [[ "${{ steps.check.outputs.test-all }}" == "true" ]]; then
-            # Find all models
-            models=$(find models -mindepth 2 -maxdepth 2 -type d -name '[!.]*' | jq -R -s -c 'split("\n")[:-1] | map(select(length > 0))')
-          else
-            # Find only changed models
-            changed_files=$(git diff --name-only $DIFF_RANGE)
-            models=$(echo "$changed_files" | grep "^models/" | cut -d/ -f1-3 | sort -u | jq -R -s -c 'split("\n")[:-1] | map(select(length > 0))')
-          fi
+            # Convert model paths to FMU names (e.g., models/thermal/rc-thermal-single-zone → RcThermalSingleZone)
+            FMU_NAMES=$(echo "$MODELS" | while read path; do
+              basename "$path" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1' | tr -d ' '
+            done)
+            FMU_NAMES_JSON=$(echo "$FMU_NAMES" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            echo "fmu-names=$FMU_NAMES_JSON" >> $GITHUB_OUTPUT
 
-          echo "models=$models" >> $GITHUB_OUTPUT
-          echo "Found models to test:"
-          echo "$models" | jq -r '.[]'
+            echo "Models to test:"
+            echo "$MODELS"
+            echo ""
+            echo "FMU names:"
+            echo "$FMU_NAMES"
+          fi
 
   # Check workspace-level integrity
   workspace-check:
@@ -116,7 +145,7 @@ jobs:
   # Test individual models
   test-models:
     needs: [detect-changes, workspace-check]
-    if: ${{ needs.detect-changes.outputs.models != '[]' }}
+    if: needs.detect-changes.outputs.has-models == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -170,8 +199,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Need full history for git diff in plot filtering
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -219,58 +246,44 @@ jobs:
 
       - name: Generate FMU output figures
         id: generate-figures
-        continue-on-error: true  # Don't fail the workflow if plot generation fails
+        continue-on-error: true
+        env:
+          FMU_NAMES: ${{ needs.detect-changes.outputs.fmu-names }}
+          TEST_ALL: ${{ needs.detect-changes.outputs.test-all }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
         run: |
-          # Determine which models to plot
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # For PRs, ALWAYS only plot models with actual file changes
-            # (independent of test-all flag which affects testing)
-            echo "PR mode: plotting only models with changed files"
+          # Use centralized change detection from detect-changes job
+          echo "FMU names from detect-changes: $FMU_NAMES"
+          echo "Test all: $TEST_ALL"
+          echo "Is PR: $IS_PR"
 
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            DIFF_RANGE="$BASE_SHA...HEAD"
-
-            # Find model directories with actual file changes
-            changed_files=$(git diff --name-only $DIFF_RANGE)
-            changed_model_dirs=$(echo "$changed_files" | grep "^models/" | cut -d/ -f1-3 | sort -u)
-
-            if [ -z "$changed_model_dirs" ]; then
-              echo "No model files changed in this PR"
+          # For PRs, only plot changed models; otherwise plot all
+          if [[ "$IS_PR" == "true" && "$TEST_ALL" != "true" ]]; then
+            if [[ "$FMU_NAMES" == "[]" || -z "$FMU_NAMES" ]]; then
+              echo "No models to plot"
               echo "[]" > plot-manifest.json
             else
-              echo "Changed model directories:"
-              echo "$changed_model_dirs"
-
-              # Convert directory paths to FMU names
-              # e.g., models/thermal/rc-thermal-single-zone → RcThermalSingleZone
-              MODEL_NAMES=$(echo "$changed_model_dirs" | \
-                awk -F/ '{print $NF}' | \
-                awk -F- '{for(i=1;i<=NF;i++){$i=toupper(substr($i,1,1)) substr($i,2)}} 1' OFS="" | \
-                paste -sd, -)
-
+              # Convert JSON array to comma-separated string
+              MODEL_NAMES=$(echo "$FMU_NAMES" | jq -r 'join(",")')
               echo "Plotting changed models: $MODEL_NAMES"
-              # Run plot generation - errors will be printed to stderr
+
               if python scripts/generate_fmu_figures.py --models "$MODEL_NAMES" --output-manifest > plot-manifest.json; then
                 echo "Plot generation completed successfully"
               else
-                echo "::warning::Some plots failed to generate. Check stderr output above for details."
-                # Create empty manifest if none exists
+                echo "::warning::Some plots failed to generate"
                 [ -f plot-manifest.json ] || echo "[]" > plot-manifest.json
               fi
             fi
           else
-            # For main branch or non-PR events, plot all models
             echo "Plotting all models"
             if python scripts/generate_fmu_figures.py --output-manifest > plot-manifest.json; then
               echo "Plot generation completed successfully"
             else
-              echo "::warning::Some plots failed to generate. Check stderr output above for details."
-              # Create empty manifest if none exists
+              echo "::warning::Some plots failed to generate"
               [ -f plot-manifest.json ] || echo "[]" > plot-manifest.json
             fi
           fi
 
-          # Display manifest
           echo "Generated plots:"
           cat plot-manifest.json
 
