@@ -142,10 +142,47 @@ cargo test -p adml-{model-name}
 6. **Document** - README with equations, validation approach
 7. **Submit** - PR with all tests passing
 
+## FMI Model Description (Machine-Readable Spec)
+
+Each model's complete specification is in `modelDescription.xml`, auto-generated per FMI 3.0 standard.
+
+### Accessing modelDescription.xml
+
+```bash
+# Option 1: Build FMU and extract
+./scripts/build-fmu.sh models/{category}/{model-name}
+unzip -p fmus/{ModelName}.fmu modelDescription.xml
+
+# Option 2: View after build (before packaging)
+./scripts/build-fmu.sh models/{category}/{model-name}
+cat modelDescription.xml  # Available in repo root temporarily
+```
+
+### What's in modelDescription.xml
+
+- All variables with causality (parameter, output, local)
+- Data types, units, start values
+- Model GUID and version
+- FMI capabilities (Co-Simulation, etc.)
+
+### FMI Schema Reference
+
+- **FMI 3.0 Specification:** https://fmi-standard.org/docs/3.0/
+- **Schema (XSD):** https://github.com/modelica/fmi-standard/tree/main/schema
+- **Variable Causalities:** parameter (settable), output (readable), local (internal)
+
+The Rust struct attributes map directly to FMI causalities:
+```rust
+#[fmu_from_struct(parameter)]  → causality="parameter"
+#[fmu_from_struct(output)]     → causality="output"
+// no attribute                → causality="local" (internal)
+```
+
 ## Further Reading
 
 - Full implementation guide: `docs/AI_AGENTS.md`
 - Ready-to-use templates: `docs/AI_SCAFFOLDING.md`
 - Contribution guidelines: `docs/CONTRIBUTING.md`
 - FMI 3.0 specification: https://fmi-standard.org/
+- FMI schema files: https://github.com/modelica/fmi-standard/tree/main/schema
 - `fmu_from_struct` docs: https://github.com/jarlekramer/fmu_from_struct

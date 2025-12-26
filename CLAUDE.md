@@ -115,3 +115,19 @@ impl FmuFunctions for ModelName {
 | Variable not in results | It's a parameter, not output |
 | Large test error (>20%) | Use smaller step size (0.01) |
 | FMU name mismatch | Fix struct name to match directory |
+
+## FMI Model Description
+
+Each model has a `modelDescription.xml` (FMI 3.0 standard) auto-generated during build.
+
+```bash
+# Extract from built FMU
+unzip -p fmus/{ModelName}.fmu modelDescription.xml
+
+# Or view after build (before packaging)
+cat modelDescription.xml
+```
+
+**FMI Resources:**
+- Specification: https://fmi-standard.org/docs/3.0/
+- Schema: https://github.com/modelica/fmi-standard/tree/main/schema
