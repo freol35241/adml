@@ -1,0 +1,131 @@
+# Model Specification: Dahlquist Test Equation
+# This file provides a machine-readable specification of the model.
+# AI agents can use this to understand model requirements and generate tests.
+
+[model]
+name = "Dahlquist"
+struct_name = "Dahlquist"
+package = "adml-dahlquist"
+version = "1.0.0"
+category = "mathematical"
+complexity = "simple"
+description = "Simple exponential decay test equation: dx/dt = -k*x"
+fmi_version = "3.0"
+
+[equations]
+# Mathematical formulation
+system_type = "ode"  # ode, dae, hybrid
+linearity = "linear"
+autonomy = "autonomous"  # autonomous (no explicit time), non-autonomous
+
+# State variables and their derivatives
+[[equations.differential]]
+state = "x"
+derivative = "-k * x"
+description = "Exponential decay"
+
+[equations.analytical_solution]
+available = true
+formula = "x(t) = x0 * exp(-k * t)"
+valid_for = "all t >= 0, k > 0"
+
+[parameters]
+[parameters.k]
+type = "Real"
+default = 1.0
+unit = "1/s"
+description = "Decay rate constant"
+constraints = "k > 0 for stable decay"
+fmi_causality = "parameter"
+
+[initial_conditions]
+[initial_conditions.x]
+type = "Real"
+default = 1.0
+unit = "1"
+description = "Initial state value"
+fmi_causality = "output"  # Initial value set via start_value, read as output
+
+[outputs]
+[outputs.x]
+type = "Real"
+unit = "1"
+description = "Current state value"
+
+[validation]
+# Validation strategies for this model
+
+[validation.analytical]
+method = "compare_to_closed_form"
+reference = "x(t) = x0 * exp(-k * t)"
+
+[[validation.analytical.checkpoints]]
+time = 0.0
+variable = "x"
+expected = 1.0
+tolerance = 1e-10
+description = "Initial condition"
+
+[[validation.analytical.checkpoints]]
+time = 1.0
+variable = "x"
+expected = 0.36788  # exp(-1)
+tolerance = 0.05
+description = "After one time constant"
+
+[[validation.analytical.checkpoints]]
+time = 5.0
+variable = "x"
+expected = 0.00674  # exp(-5)
+tolerance = 0.10
+description = "After five time constants"
+
+[validation.convergence]
+method = "step_size_refinement"
+step_sizes = [0.1, 0.01, 0.001]
+expected_order = 1  # Euler is first-order
+error_should_decrease = true
+
+[validation.stability]
+method = "long_term_behavior"
+simulation_time = 100.0
+expected_steady_state = 0.0
+tolerance = 0.01
+
+[validation.properties]
+exponential_decay = true
+bounded_solution = true
+equilibrium_at_origin = true
+
+[testing]
+# Required test categories
+required = [
+    "initialization",
+    "derivative_calculation",
+    "analytical_solution",
+    "convergence",
+    "parameter_sensitivity"
+]
+
+# Recommended step sizes
+euler_step_size = 0.01
+simulation_tolerance = 0.05
+
+[testing.edge_cases]
+# Edge cases to test
+zero_initial_condition = { x0 = 0.0, expected_behavior = "remains_at_zero" }
+large_parameter = { k = 100.0, notes = "Use smaller step size" }
+small_parameter = { k = 0.01, notes = "Slow decay, test longer" }
+
+[references]
+# Academic and technical references
+[[references.sources]]
+type = "standard"
+name = "FMI Reference FMUs"
+url = "https://github.com/modelica/Reference-FMUs"
+notes = "Dahlquist is a standard FMI test model"
+
+[[references.sources]]
+type = "textbook"
+name = "Numerical Methods"
+notes = "Standard test equation for ODE solvers"
