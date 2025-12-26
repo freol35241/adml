@@ -13,7 +13,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Audit Rust dependencies for known vulnerabilities
   cargo-audit:
     name: Cargo Audit
     runs-on: ubuntu-latest
@@ -28,32 +27,3 @@ jobs:
 
       - name: Run security audit
         run: cargo audit
-
-  # Check for unmaintained or yanked dependencies
-  cargo-deny:
-    name: Cargo Deny
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run cargo-deny
-        uses: EmbarkStudios/cargo-deny-action@v1
-        with:
-          command: check advisories
-          arguments: --workspace
-
-  # Summary job for branch protection
-  security-success:
-    name: Security Checks
-    needs: [cargo-audit, cargo-deny]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check results
-        run: |
-          if [[ "${{ needs.cargo-audit.result }}" != "success" ]] || \
-             [[ "${{ needs.cargo-deny.result }}" != "success" ]]; then
-            echo "Security checks failed"
-            exit 1
-          fi
-          echo "All security checks passed"

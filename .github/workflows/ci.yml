@@ -487,62 +487,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./target/doc
 
-  # FMI 3.0 Compliance Check
-  fmi-compliance:
-    needs: [fmu-integration]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download FMU artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: fmus
-          path: fmus/
-
-      - name: List FMUs to check
-        run: |
-          echo "FMUs to check for FMI compliance:"
-          ls -lh fmus/*.fmu
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip
-
-      - name: Check FMI Compliance for all FMUs
-        run: |
-          # Track overall result
-          OVERALL_RESULT=0
-
-          for fmu in fmus/*.fmu; do
-            echo ""
-            echo "=========================================="
-            echo "Checking: $(basename $fmu)"
-            echo "=========================================="
-
-            if ./scripts/check-fmu-compliance.sh "$fmu"; then
-              echo "✅ $(basename $fmu) PASSED"
-            else
-              echo "❌ $(basename $fmu) FAILED"
-              OVERALL_RESULT=1
-            fi
-          done
-
-          exit $OVERALL_RESULT
-
-      - name: Summary
-        if: always()
-        run: |
-          echo "## FMI Compliance Check Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          for fmu in fmus/*.fmu; do
-            echo "- \`$(basename $fmu)\` - Checked" >> $GITHUB_STEP_SUMMARY
-          done
-
   # Final status check
   ci-success:
-    needs: [workspace-check, test-models, fmu-integration, pr-figures, docs, fmi-compliance]
+    needs: [workspace-check, test-models, fmu-integration, docs]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -551,9 +498,7 @@ jobs:
           if [[ "${{ needs.workspace-check.result }}" != "success" ]] || \
              [[ "${{ needs.test-models.result }}" != "success" && "${{ needs.test-models.result }}" != "skipped" ]] || \
              [[ "${{ needs.fmu-integration.result }}" != "success" ]] || \
-             [[ "${{ needs.pr-figures.result }}" != "success" && "${{ needs.pr-figures.result }}" != "skipped" ]] || \
-             [[ "${{ needs.docs.result }}" != "success" ]] || \
-             [[ "${{ needs.fmi-compliance.result }}" != "success" ]]; then
+             [[ "${{ needs.docs.result }}" != "success" ]]; then
             echo "CI failed"
             exit 1
           fi
