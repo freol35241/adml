@@ -46,6 +46,9 @@ pub struct BouncingBall {
     /// Minimum velocity threshold below which the ball stops
     v_min: f64,
 
+    /// Whether the ball has stopped bouncing (at rest on ground)
+    stopped: bool,
+
     /// FMU runtime information (optional)
     pub fmu_info: FmuInfo,
 }
@@ -57,6 +60,11 @@ impl FmuFunctions for BouncingBall {
     }
 
     fn do_step(&mut self, _current_time: f64, time_step: f64) {
+        // If ball has stopped, no dynamics
+        if self.stopped {
+            return;
+        }
+
         // Check for collision at start of step (before integration)
         if self.h <= 0.0 && self.v < 0.0 {
             // Ball has hit the ground
@@ -67,7 +75,7 @@ impl FmuFunctions for BouncingBall {
             if self.v < self.v_min {
                 self.v = 0.0;
                 self.h = 0.0;
-                self.g = 0.0; // Disable gravity when stopped
+                self.stopped = true; // Ball is now at rest
             }
 
             // Don't integrate in the same step as a bounce (bounce is instantaneous)
@@ -100,8 +108,14 @@ impl BouncingBall {
             h: 1.0,
             v: 0.0,
             v_min: 0.1,
+            stopped: false,
             fmu_info: FmuInfo::default(),
         }
+    }
+
+    /// Check if the ball has stopped bouncing
+    pub fn is_stopped(&self) -> bool {
+        self.stopped
     }
 
     /// Calculate kinetic energy (assuming unit mass)
@@ -185,6 +199,7 @@ mod tests {
     #[test]
     fn test_stopping_condition() {
         let mut model = BouncingBall::new();
+        let original_g = model.g;
         model.h = 0.0;
         model.v = -0.05; // Below v_min = 0.1
 
@@ -193,7 +208,8 @@ mod tests {
         // Ball should have stopped
         assert_eq!(model.v, 0.0);
         assert_eq!(model.h, 0.0);
-        assert_eq!(model.g, 0.0); // Gravity disabled
+        assert!(model.is_stopped()); // Ball is at rest
+        assert_eq!(model.g, original_g); // Gravity parameter unchanged
     }
 
     #[test]
