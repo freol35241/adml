@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["fmi2CancelStep","fmi2GetBooleanStatus","fmi2GetDirectionalDerivative","fmi2GetIntegerStatus","fmi2GetRealOutputDerivatives","fmi2GetRealStatus","fmi2GetStatus","fmi2GetStringStatus","fmi2SetDebugLogging","fmi2SetRealInputDerivatives","fmi2SetupExperiment","fmi2Terminate"]};
