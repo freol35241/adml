@@ -21,6 +21,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "adml-lorenz"
+version = "1.0.0"
+dependencies = [
+ "approx",
+ "fmu_from_struct",
+ "physics-framework",
+]
+
+[[package]]
 name = "adml-rc-thermal-single-zone"
 version = "1.0.0"
 dependencies = [
