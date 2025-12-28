@@ -135,10 +135,32 @@ jobs:
 
       - name: Generate release notes
         run: |
-          cat > release-notes.md << 'EOF'
+          # Get workspace version from Cargo.toml
+          WORKSPACE_VERSION=$(grep -A5 '^\[workspace.package\]' Cargo.toml | grep '^version' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+
+          # Get FMI version from a model Cargo.toml
+          FMI_VERSION=$(grep 'fmi_version' models/mathematical/dahlquist/Cargo.toml | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/' || echo "3.0")
+
+          # Count models
+          MODEL_COUNT=$(ls -1 fmus/*.fmu 2>/dev/null | wc -l)
+
+          # Get git info for changelog
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+
+          # Get supported platforms from Cross.toml
+          PLATFORMS=""
+          if [ -f Cross.toml ]; then
+            PLATFORMS=$(grep '^\[target\.' Cross.toml | sed 's/\[target\.\(.*\)\]/\1/' | tr '\n' ', ' | sed 's/,$//')
+          fi
+
+          cat > release-notes.md << EOF
           # ADML - AI-Generated Dynamical Model Library
 
-          FMI 3.0 compatible FMU files ready to use in any FMI-supporting simulation tool.
+          > **Release**: ${{ steps.release-details.outputs.name }} | **Models**: ${MODEL_COUNT} | **FMI**: ${FMI_VERSION}
+
+          FMI ${FMI_VERSION} compatible FMU files ready to use in any FMI-supporting simulation tool.
 
           **Each FMU contains binaries for multiple platforms:**
           - ✅ **Linux x86_64** - Native .so library
@@ -146,54 +168,187 @@ jobs:
 
           Download once, run anywhere!
 
+          ---
+
           ## 📦 Models in this Release
 
           EOF
 
-          # List models with descriptions
+          # Generate model table dynamically from Cargo.toml metadata
+          echo "| Model | Version | Description |" >> release-notes.md
+          echo "|-------|---------|-------------|" >> release-notes.md
+
           for fmu in fmus/*.fmu; do
             model_name=$(basename "$fmu" .fmu)
-            echo "- **$model_name.fmu** - Multi-platform FMI 3.0 Co-Simulation model" >> release-notes.md
+
+            # Find the matching Cargo.toml for this model
+            cargo_toml=""
+            for toml in models/*/*/Cargo.toml; do
+              if grep -q "model_name = \"$model_name\"" "$toml" 2>/dev/null; then
+                cargo_toml="$toml"
+                break
+              fi
+            done
+
+            if [ -n "$cargo_toml" ] && [ -f "$cargo_toml" ]; then
+              # Extract version and description from Cargo.toml
+              model_version=$(grep '^version = ' "$cargo_toml" | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+              model_desc=$(grep '^description = ' "$cargo_toml" | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+
+              # Get FMI-specific description if available
+              fmi_desc=$(grep -A5 '\[package.metadata.fmi\]' "$cargo_toml" | grep 'description' | sed 's/.*= *"\([^"]*\)".*/\1/')
+
+              # Use FMI description if available, otherwise package description
+              final_desc="${fmi_desc:-$model_desc}"
+              final_desc="${final_desc:-Multi-platform FMI ${FMI_VERSION} Co-Simulation model}"
+
+              echo "| **${model_name}.fmu** | ${model_version:-1.0.0} | ${final_desc} |" >> release-notes.md
+            else
+              echo "| **${model_name}.fmu** | - | Multi-platform FMI ${FMI_VERSION} Co-Simulation model |" >> release-notes.md
+            fi
           done
 
-          cat >> release-notes.md << 'EOF'
+          cat >> release-notes.md << EOF
 
-          ## 🚀 How to Use
+          ---
+
+          <details>
+          <summary><strong>🚀 How to Use</strong></summary>
+
+          ### Quick Start
 
           1. Download the FMU file for your desired model
-          2. Load it in any FMI 3.0 compatible tool on Linux or Windows:
-             - **FMPy** (Python) - Cross-platform
-             - **Dymola** - Windows/Linux
-             - **Simulink** with FMI Toolbox - Windows/Linux
-             - **OpenModelica** - Cross-platform
-             - And many more...
+          2. Load it in any FMI ${FMI_VERSION} compatible tool on Linux or Windows
+
+          ### Supported Tools
+
+          | Tool | Platform | Notes |
+          |------|----------|-------|
+          | **FMPy** | Cross-platform | Python library, great for scripting |
+          | **Dymola** | Windows/Linux | Commercial Modelica environment |
+          | **Simulink** | Windows/Linux | With FMI Toolbox |
+          | **OpenModelica** | Cross-platform | Open-source Modelica |
+          | **PyFMI** | Cross-platform | Python FMI library |
+          | **INTO-CPS** | Cross-platform | Co-simulation framework |
 
           The FMU will automatically use the correct binary for your platform!
 
-          ## ✅ Testing
+          </details>
 
-          All FMUs are thoroughly tested with:
-          - **Tier 1**: Rust unit & physics tests
-          - **Tier 2**: FMU integration tests with FMPy
-          - **Tier 3**: FMI 3.0 compliance verification
+          <details>
+          <summary><strong>✅ Testing & Quality</strong></summary>
 
-          ## 📝 Models Included
+          All FMUs are thoroughly tested with a multi-tier approach:
 
-          - **Dahlquist** - Simple ODE test equation: dx/dt = -k·x
-          - **Van der Pol** - Nonlinear oscillator with limit cycle
-          - **Bouncing Ball** - Ball with gravity and elastic collisions
+          | Tier | Type | Description |
+          |------|------|-------------|
+          | **Tier 1** | Unit Tests | Rust unit tests for model logic |
+          | **Tier 2** | Physics Tests | Validation against analytical solutions |
+          | **Tier 3** | Integration Tests | FMU integration tests with FMPy |
+          | **Tier 4** | Compliance | FMI ${FMI_VERSION} standard verification |
+
+          </details>
+
+          EOF
+
+          # Generate model details section dynamically
+          echo "<details>" >> release-notes.md
+          echo "<summary><strong>📝 Model Details</strong></summary>" >> release-notes.md
+          echo "" >> release-notes.md
+
+          for fmu in fmus/*.fmu; do
+            model_name=$(basename "$fmu" .fmu)
+            fmu_size=$(ls -lh "$fmu" | awk '{print $5}')
+
+            # Find the matching Cargo.toml for this model
+            cargo_toml=""
+            for toml in models/*/*/Cargo.toml; do
+              if grep -q "model_name = \"$model_name\"" "$toml" 2>/dev/null; then
+                cargo_toml="$toml"
+                break
+              fi
+            done
+
+            if [ -n "$cargo_toml" ] && [ -f "$cargo_toml" ]; then
+              model_version=$(grep '^version = ' "$cargo_toml" | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+              model_desc=$(grep '^description = ' "$cargo_toml" | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+              model_guid=$(grep 'guid = ' "$cargo_toml" | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+
+              # Get lib.rs path for doc comment extraction
+              lib_dir=$(dirname "$cargo_toml")
+              lib_rs="${lib_dir}/src/lib.rs"
+
+              echo "### ${model_name}" >> release-notes.md
+              echo "" >> release-notes.md
+              echo "- **Version**: ${model_version:-1.0.0}" >> release-notes.md
+              echo "- **Description**: ${model_desc:-N/A}" >> release-notes.md
+              echo "- **GUID**: \`${model_guid:-N/A}\`" >> release-notes.md
+              echo "- **File Size**: ${fmu_size}" >> release-notes.md
+
+              # Extract platforms from FMU
+              echo "- **Platforms**:" >> release-notes.md
+              unzip -l "$fmu" 2>/dev/null | grep 'binaries/' | sed 's/.*binaries\//  - /' | sed 's/\/.*//' | sort -u >> release-notes.md || echo "  - See FMU contents" >> release-notes.md
+
+              echo "" >> release-notes.md
+            fi
+          done
+
+          echo "</details>" >> release-notes.md
+          echo "" >> release-notes.md
+
+          # Add changelog section if there's a previous tag
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "<details>" >> release-notes.md
+            echo "<summary><strong>📋 Changelog (since ${PREVIOUS_TAG})</strong></summary>" >> release-notes.md
+            echo "" >> release-notes.md
+            echo "| Commit | Description |" >> release-notes.md
+            echo "|--------|-------------|" >> release-notes.md
+            git log ${PREVIOUS_TAG}..HEAD --pretty=format:"| \`%h\` | %s |" >> release-notes.md
+            echo "" >> release-notes.md
+            echo "" >> release-notes.md
+            echo "</details>" >> release-notes.md
+            echo "" >> release-notes.md
+          fi
+
+          cat >> release-notes.md << EOF
+          <details>
+          <summary><strong>🛠️ Technical Details</strong></summary>
+
+          ### Build Information
+
+          | Property | Value |
+          |----------|-------|
+          | **FMI Version** | ${FMI_VERSION} |
+          | **Mode** | Co-Simulation |
+          | **Platforms** | Linux x86_64, Windows x86_64 |
+          | **Build Date** | ${BUILD_DATE} |
+          | **Commit** | \`${COMMIT_SHA}\` |
+          | **Workspace Version** | ${WORKSPACE_VERSION} |
+
+          ### Build Stack
+
+          - **Language**: Rust (stable)
+          - **FMI Library**: fmu_from_struct
+          - **Cross-compilation**: cross (cross-rs)
+          - **CI/CD**: GitHub Actions
+
+          ### FMU Structure
+
+          Each FMU file is a ZIP archive containing:
+          \`\`\`
+          modelDescription.xml      # FMI model description
+          binaries/
+            x86_64-linux/          # Linux shared library (.so)
+            x86_64-windows/        # Windows DLL (.dll)
+          \`\`\`
+
+          </details>
+
+          ---
 
           ## 📚 Documentation
 
-          For detailed documentation, visit the [repository](https://github.com/$GITHUB_REPOSITORY).
-
-          ## 🛠️ Technical Details
-
-          - **FMI Version**: 3.0
-          - **Mode**: Co-Simulation
-          - **Platforms**: Linux x86_64, Windows x86_64 (both in each FMU)
-          - **Built with**: Rust + fmu_from_struct
-          - **Cross-compiled**: Using cross (cross-rs)
+          For detailed documentation, examples, and contribution guidelines, visit the [repository](https://github.com/${GITHUB_REPOSITORY}).
 
           EOF
 
@@ -215,15 +370,48 @@ jobs:
 
       - name: Summary
         run: |
+          # Get dynamic info
+          WORKSPACE_VERSION=$(grep -A5 '^\[workspace.package\]' Cargo.toml | grep '^version' | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+          FMI_VERSION=$(grep 'fmi_version' models/mathematical/dahlquist/Cargo.toml | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/' || echo "3.0")
+          MODEL_COUNT=$(ls -1 fmus/*.fmu 2>/dev/null | wc -l)
+          TOTAL_SIZE=$(du -ch fmus/*.fmu | tail -1 | cut -f1)
+          BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+
           echo "## 🎉 Release Created!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Release:** ${{ steps.release-details.outputs.name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** ${{ steps.release-details.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Release** | ${{ steps.release-details.outputs.name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Tag** | ${{ steps.release-details.outputs.tag }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${COMMIT_SHA}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **FMI Version** | ${FMI_VERSION} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Workspace Version** | ${WORKSPACE_VERSION} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Build Date** | ${BUILD_DATE} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Multi-Platform FMU Files" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Multi-Platform FMU Files (${MODEL_COUNT} models, ${TOTAL_SIZE} total)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Each FMU contains binaries for **Linux x86_64** and **Windows x86_64**:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          ls fmus/*.fmu | while read fmu; do
-            echo "- $(basename $fmu)" >> $GITHUB_STEP_SUMMARY
+          echo "| Model | Version | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|---------|------|" >> $GITHUB_STEP_SUMMARY
+          for fmu in fmus/*.fmu; do
+            model_name=$(basename "$fmu" .fmu)
+            fmu_size=$(ls -lh "$fmu" | awk '{print $5}')
+
+            # Find model version
+            model_version=""
+            for toml in models/*/*/Cargo.toml; do
+              if grep -q "model_name = \"$model_name\"" "$toml" 2>/dev/null; then
+                model_version=$(grep '^version = ' "$toml" | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+                break
+              fi
+            done
+
+            echo "| ${model_name}.fmu | ${model_version:-1.0.0} | ${fmu_size} |" >> $GITHUB_STEP_SUMMARY
           done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Platforms Included" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- 🐧 **Linux x86_64** - Native .so library" >> $GITHUB_STEP_SUMMARY
+          echo "- 🪟 **Windows x86_64** - Native .dll library" >> $GITHUB_STEP_SUMMARY
