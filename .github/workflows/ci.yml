@@ -142,6 +142,46 @@ jobs:
       - name: Build workspace
         run: cargo build --workspace
 
+  # Test Windows cross-compilation setup
+  # This catches cross-compilation issues early before they break the release
+  cross-compile-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-cross-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-cross-
+            ${{ runner.os }}-cargo-
+
+      - name: Install cross
+        run: |
+          if ! command -v cross &> /dev/null; then
+            cargo install cross
+          fi
+
+      - name: Test Windows cross-compilation
+        run: |
+          # Build one model to verify cross-compilation works
+          # This uses Cross.toml configuration with the edge Docker image
+          cross build -p adml-dahlquist --release --target x86_64-pc-windows-gnu
+
+      - name: Summary
+        run: |
+          echo "## ✅ Cross-Compilation Check" >> $GITHUB_STEP_SUMMARY
+          echo "Windows x86_64 cross-compilation verified successfully" >> $GITHUB_STEP_SUMMARY
+
   # Test individual models
   test-models:
     needs: [detect-changes, workspace-check]
@@ -502,13 +542,14 @@ jobs:
 
   # Final status check
   ci-success:
-    needs: [workspace-check, test-models, fmu-integration, docs]
+    needs: [workspace-check, cross-compile-check, test-models, fmu-integration, docs]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
           if [[ "${{ needs.workspace-check.result }}" != "success" ]] || \
+             [[ "${{ needs.cross-compile-check.result }}" != "success" ]] || \
              [[ "${{ needs.test-models.result }}" != "success" && "${{ needs.test-models.result }}" != "skipped" ]] || \
              [[ "${{ needs.fmu-integration.result }}" != "success" ]] || \
              [[ "${{ needs.docs.result }}" != "success" ]]; then
