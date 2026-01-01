@@ -328,14 +328,14 @@ jobs:
           cat plot-manifest.json
 
       - name: Upload plot manifest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: plot-manifest
           path: plot-manifest.json
           retention-days: 30
 
       - name: Upload FMU output figures
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fmu-figures
           path: fmu-figures/*.png
@@ -343,7 +343,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload FMU artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fmus
           path: fmus/*.fmu
