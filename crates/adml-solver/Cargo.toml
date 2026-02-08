@@ -1,0 +1,11 @@
+[package]
+name = "adml-solver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Reusable numerical solvers for ADML FMU models"
+
+[dependencies]
+fmi-export = { workspace = true }
+fmi = { workspace = true }

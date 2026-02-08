@@ -18,7 +18,7 @@
 //! Classic chaotic parameters: σ=10, ρ=28, β=8/3
 
 use fmi::fmi3::{Fmi3Error, Fmi3Res};
-use fmi_export::fmi3::{CSDoStepResult, Context, DefaultLoggingCategory, UserModel};
+use fmi_export::fmi3::{Context, DefaultLoggingCategory, UserModel};
 use fmi_export::FmuModel;
 
 /// Lorenz system model
@@ -81,27 +81,7 @@ impl UserModel for Lorenz {
         Ok(Fmi3Res::OK)
     }
 
-    fn do_step(
-        &mut self,
-        context: &mut dyn Context<Self>,
-        current_communication_point: f64,
-        communication_step_size: f64,
-        _no_set_fmu_state_prior_to_current_point: bool,
-    ) -> Result<CSDoStepResult, Fmi3Error> {
-        // Calculate derivatives according to Lorenz equations
-        self.der_x = self.sigma * (self.y - self.x);
-        self.der_y = self.x * (self.rho - self.z) - self.y;
-        self.der_z = self.x * self.y - self.beta * self.z;
-
-        // Euler integration
-        self.x += self.der_x * communication_step_size;
-        self.y += self.der_y * communication_step_size;
-        self.z += self.der_z * communication_step_size;
-
-        let target_time = current_communication_point + communication_step_size;
-        context.set_time(target_time);
-        Ok(CSDoStepResult::completed(target_time))
-    }
+    adml_solver::euler_cs_step!(0.0001);
 }
 
 fmi_export::export_fmu!(Lorenz);

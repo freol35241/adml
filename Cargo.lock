@@ -12,6 +12,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 name = "adml-bouncing-ball"
 version = "1.0.0"
 dependencies = [
+ "adml-solver",
  "approx",
  "fmi",
  "fmi-export",
@@ -22,6 +23,7 @@ dependencies = [
 name = "adml-dahlquist"
 version = "1.0.0"
 dependencies = [
+ "adml-solver",
  "approx",
  "fmi",
  "fmi-export",
@@ -32,6 +34,7 @@ dependencies = [
 name = "adml-lorenz"
 version = "1.0.0"
 dependencies = [
+ "adml-solver",
  "approx",
  "fmi",
  "fmi-export",
@@ -42,6 +45,7 @@ dependencies = [
 name = "adml-rc-thermal-single-zone"
 version = "1.0.0"
 dependencies = [
+ "adml-solver",
  "approx",
  "fmi",
  "fmi-export",
@@ -52,6 +56,7 @@ dependencies = [
 name = "adml-simple-pendulum"
 version = "1.0.0"
 dependencies = [
+ "adml-solver",
  "approx",
  "fmi",
  "fmi-export",
@@ -59,9 +64,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "adml-solver"
+version = "0.1.0"
+dependencies = [
+ "fmi",
+ "fmi-export",
+]
+
+[[package]]
 name = "adml-van-der-pol"
 version = "1.0.0"
 dependencies = [
+ "adml-solver",
  "approx",
  "fmi",
  "fmi-export",

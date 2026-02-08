@@ -13,6 +13,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 fmi-export = { workspace = true }
 fmi = { workspace = true }
+adml-solver = { workspace = true }
 
 [dev-dependencies]
 physics-framework = { path = "../../../testing/physics-framework" }

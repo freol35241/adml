@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+    "crates/*",
     "models/mathematical/*",
     "models/mechanical/*",
     "models/thermal/*",
@@ -22,6 +23,9 @@ repository = "https://github.com/freol35241/adml"
 # FMI export dependencies - migrated to fmi-export from rust-fmi
 fmi-export = "0.1"
 fmi = "0.6"
+
+# ADML shared crates
+adml-solver = { path = "crates/adml-solver" }
 
 # Testing dependencies
 approx = "0.5"

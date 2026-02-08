@@ -12,7 +12,7 @@
 //! The Dahlquist test equation is particularly useful for analyzing stiff solvers.
 
 use fmi::fmi3::{Fmi3Error, Fmi3Res};
-use fmi_export::fmi3::{CSDoStepResult, Context, DefaultLoggingCategory, UserModel};
+use fmi_export::fmi3::{Context, DefaultLoggingCategory, UserModel};
 use fmi_export::FmuModel;
 
 /// Dahlquist test equation model
@@ -42,23 +42,7 @@ impl UserModel for Dahlquist {
         Ok(Fmi3Res::OK)
     }
 
-    fn do_step(
-        &mut self,
-        context: &mut dyn Context<Self>,
-        current_communication_point: f64,
-        communication_step_size: f64,
-        _no_set_fmu_state_prior_to_current_point: bool,
-    ) -> Result<CSDoStepResult, Fmi3Error> {
-        // Calculate derivative
-        self.der_x = -self.k * self.x;
-
-        // Euler integration: x = x + dx/dt * dt
-        self.x += self.der_x * communication_step_size;
-
-        let target_time = current_communication_point + communication_step_size;
-        context.set_time(target_time);
-        Ok(CSDoStepResult::completed(target_time))
-    }
+    adml_solver::euler_cs_step!(0.001);
 }
 
 fmi_export::export_fmu!(Dahlquist);

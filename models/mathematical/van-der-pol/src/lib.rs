@@ -10,7 +10,7 @@
 //! studying self-sustaining oscillations in various physical systems.
 
 use fmi::fmi3::{Fmi3Error, Fmi3Res};
-use fmi_export::fmi3::{CSDoStepResult, Context, DefaultLoggingCategory, UserModel};
+use fmi_export::fmi3::{Context, DefaultLoggingCategory, UserModel};
 use fmi_export::FmuModel;
 
 /// Van der Pol oscillator model
@@ -55,25 +55,7 @@ impl UserModel for VanDerPol {
         Ok(Fmi3Res::OK)
     }
 
-    fn do_step(
-        &mut self,
-        context: &mut dyn Context<Self>,
-        current_communication_point: f64,
-        communication_step_size: f64,
-        _no_set_fmu_state_prior_to_current_point: bool,
-    ) -> Result<CSDoStepResult, Fmi3Error> {
-        // Calculate derivatives according to Van der Pol equations
-        self.der_x0 = self.x1;
-        self.der_x1 = self.mu * (1.0 - self.x0 * self.x0) * self.x1 - self.x0;
-
-        // Euler integration
-        self.x0 += self.der_x0 * communication_step_size;
-        self.x1 += self.der_x1 * communication_step_size;
-
-        let target_time = current_communication_point + communication_step_size;
-        context.set_time(target_time);
-        Ok(CSDoStepResult::completed(target_time))
-    }
+    adml_solver::euler_cs_step!(0.0001);
 }
 
 fmi_export::export_fmu!(VanDerPol);

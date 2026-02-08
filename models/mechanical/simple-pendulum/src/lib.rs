@@ -40,7 +40,7 @@
 #![allow(non_snake_case)]
 
 use fmi::fmi3::{Fmi3Error, Fmi3Res};
-use fmi_export::fmi3::{CSDoStepResult, Context, DefaultLoggingCategory, UserModel};
+use fmi_export::fmi3::{Context, DefaultLoggingCategory, UserModel};
 use fmi_export::FmuModel;
 
 /// Simple pendulum model with nonlinear dynamics
@@ -111,33 +111,11 @@ impl UserModel for SimplePendulum {
     fn calculate_values(&mut self, _context: &dyn Context<Self>) -> Result<Fmi3Res, Fmi3Error> {
         self.der_theta = self.omega;
         self.der_omega = -(self.g / self.L) * self.theta.sin() - (self.b / self.m) * self.omega;
+        self.update_derived_outputs();
         Ok(Fmi3Res::OK)
     }
 
-    fn do_step(
-        &mut self,
-        context: &mut dyn Context<Self>,
-        current_communication_point: f64,
-        communication_step_size: f64,
-        _no_set_fmu_state_prior_to_current_point: bool,
-    ) -> Result<CSDoStepResult, Fmi3Error> {
-        // Calculate angular acceleration
-        self.der_omega = -(self.g / self.L) * self.theta.sin() - (self.b / self.m) * self.omega;
-
-        // Symplectic Euler integration (semi-implicit Euler)
-        // Update velocity first using current position
-        self.omega += self.der_omega * communication_step_size;
-        // Then update position using NEW velocity (this is the key difference)
-        self.theta += self.omega * communication_step_size;
-        self.der_theta = self.omega;
-
-        // Update derived outputs after integration
-        self.update_derived_outputs();
-
-        let target_time = current_communication_point + communication_step_size;
-        context.set_time(target_time);
-        Ok(CSDoStepResult::completed(target_time))
-    }
+    adml_solver::symplectic_euler_cs_step!(0.001);
 }
 
 fmi_export::export_fmu!(SimplePendulum);

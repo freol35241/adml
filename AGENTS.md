@@ -40,7 +40,7 @@ models/{category}/{model-name}/
 ### 3. Implement Model
 ```rust
 use fmi::fmi3::{Fmi3Error, Fmi3Res};
-use fmi_export::fmi3::{CSDoStepResult, Context, DefaultLoggingCategory, UserModel};
+use fmi_export::fmi3::{Context, DefaultLoggingCategory, UserModel};
 use fmi_export::FmuModel;
 
 #[derive(FmuModel, Default, Debug)]
@@ -67,24 +67,17 @@ impl UserModel for ModelName {
         Ok(Fmi3Res::OK)
     }
 
-    fn do_step(
-        &mut self,
-        context: &mut dyn Context<Self>,
-        current_communication_point: f64,
-        communication_step_size: f64,
-        _no_set_fmu_state_prior_to_current_point: bool,
-    ) -> Result<CSDoStepResult, Fmi3Error> {
-        self.der_state = /* your equation */;
-        self.state += self.der_state * communication_step_size;  // Euler integration
-
-        let target_time = current_communication_point + communication_step_size;
-        context.set_time(target_time);
-        Ok(CSDoStepResult::completed(target_time))
-    }
+    // Forward Euler with 1ms micro-stepping (serves both CS and ME)
+    adml_solver::euler_cs_step!(0.001);
 }
 
 fmi_export::export_fmu!(ModelName);
 ```
+
+**Solver choices:**
+- `adml_solver::euler_cs_step!(step)` - Forward Euler (most models)
+- `adml_solver::symplectic_euler_cs_step!(step)` - Symplectic Euler (Hamiltonian systems like pendulums)
+- Custom `do_step` - For models with events (e.g., bouncing ball)
 
 ### 4. Cargo.toml Template
 ```toml
@@ -99,6 +92,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 fmi-export = { workspace = true }
 fmi = { workspace = true }
+adml-solver = { workspace = true }
 
 [dev-dependencies]
 physics-framework = { path = "../../../testing/physics-framework" }
@@ -182,7 +176,7 @@ cargo fmi --package adml-{model-name}
 
 1. **Understand** - Read model specification, identify equations
 2. **Scaffold** - Create directory, copy templates
-3. **Implement** - Write `do_step()` with differential equations
+3. **Implement** - Write `calculate_values()` with differential equations, use solver macro
 4. **Test** - Unit tests, physics validation, convergence
 5. **Build FMU** - Run `cargo fmi` or build script
 6. **Document** - README with equations, validation approach

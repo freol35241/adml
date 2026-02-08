@@ -33,7 +33,7 @@
 #![allow(non_snake_case)]
 
 use fmi::fmi3::{Fmi3Error, Fmi3Res};
-use fmi_export::fmi3::{CSDoStepResult, Context, DefaultLoggingCategory, UserModel};
+use fmi_export::fmi3::{Context, DefaultLoggingCategory, UserModel};
 use fmi_export::FmuModel;
 
 /// Single-zone 1R1C thermal model
@@ -91,24 +91,7 @@ impl UserModel for RcThermalSingleZone {
         Ok(Fmi3Res::OK)
     }
 
-    fn do_step(
-        &mut self,
-        context: &mut dyn Context<Self>,
-        current_communication_point: f64,
-        communication_step_size: f64,
-        _no_set_fmu_state_prior_to_current_point: bool,
-    ) -> Result<CSDoStepResult, Fmi3Error> {
-        // Calculate heat flows
-        self.update_derived_outputs();
-
-        // Euler integration: dT/dt = Q_net / C
-        self.der_T_indoor = self.Q_net / self.C;
-        self.T_indoor += self.der_T_indoor * communication_step_size;
-
-        let target_time = current_communication_point + communication_step_size;
-        context.set_time(target_time);
-        Ok(CSDoStepResult::completed(target_time))
-    }
+    adml_solver::euler_cs_step!(1.0);
 }
 
 fmi_export::export_fmu!(RcThermalSingleZone);

@@ -11,7 +11,9 @@
 //! - Stop bouncing when |v| < v_min
 
 use fmi::fmi3::{Fmi3Error, Fmi3Res};
-use fmi_export::fmi3::{CSDoStepResult, Context, DefaultLoggingCategory, UserModel};
+use fmi_export::fmi3::{
+    CSDoStepResult, Context, DefaultLoggingCategory, ModelGetSetStates, UserModel,
+};
 use fmi_export::FmuModel;
 
 /// Bouncing Ball FMU model
@@ -76,50 +78,55 @@ impl UserModel for BouncingBall {
         communication_step_size: f64,
         _no_set_fmu_state_prior_to_current_point: bool,
     ) -> Result<CSDoStepResult, Fmi3Error> {
-        // If ball has stopped, no dynamics
-        if self.stopped {
-            let target_time = current_communication_point + communication_step_size;
-            context.set_time(target_time);
-            return Ok(CSDoStepResult::completed(target_time));
-        }
+        const FIXED_STEP: f64 = 0.001;
 
-        // Check for collision at start of step (before integration)
-        if self.h <= 0.0 && self.v < 0.0 {
-            // Ball has hit the ground
-            self.h = f64::MIN_POSITIVE; // Place slightly above ground
-            self.v = -self.v * self.e; // Reverse velocity with energy loss
+        let t_end = current_communication_point + communication_step_size;
+        let mut t = current_communication_point;
 
-            // Stop bouncing if velocity becomes too small
-            if self.v < self.v_min {
-                self.v = 0.0;
-                self.h = 0.0;
-                self.stopped = true; // Ball is now at rest
+        let mut x = vec![0.0; Self::NUM_STATES];
+        let mut dx = vec![0.0; Self::NUM_STATES];
+
+        while t_end - t > f64::EPSILON * t_end.abs().max(1.0) {
+            if self.stopped {
+                break;
             }
 
-            // Don't integrate in the same step as a bounce (bounce is instantaneous)
-            let target_time = current_communication_point + communication_step_size;
-            context.set_time(target_time);
-            return Ok(CSDoStepResult::completed(target_time));
+            let dt = (t_end - t).min(FIXED_STEP);
+
+            // Handle collision event before integration
+            if self.h <= 0.0 && self.v < 0.0 {
+                self.h = f64::MIN_POSITIVE;
+                self.v = -self.v * self.e;
+
+                if self.v < self.v_min {
+                    self.v = 0.0;
+                    self.h = 0.0;
+                    self.stopped = true;
+                    break;
+                }
+            }
+
+            // Forward Euler micro-step
+            self.calculate_values(context)?;
+            self.get_continuous_states(&mut x)?;
+            self.get_continuous_state_derivatives(&mut dx)?;
+
+            for i in 0..Self::NUM_STATES {
+                x[i] += dx[i] * dt;
+            }
+
+            self.set_continuous_states(&x)?;
+            t += dt;
+            context.set_time(t);
+
+            // Snap to ground if ball crossed during step
+            if self.h < 0.0 {
+                self.h = 0.0;
+            }
         }
 
-        // Calculate derivatives:
-        // der(h) = v
-        // der(v) = g
-        self.der_h = self.v;
-        self.der_v = self.g;
-
-        // Euler integration
-        self.h += self.der_h * communication_step_size;
-        self.v += self.der_v * communication_step_size;
-
-        // Check for collision after integration (ball crossed ground during step)
-        if self.h < 0.0 {
-            self.h = 0.0; // Snap to ground level
-        }
-
-        let target_time = current_communication_point + communication_step_size;
-        context.set_time(target_time);
-        Ok(CSDoStepResult::completed(target_time))
+        context.set_time(t_end);
+        Ok(CSDoStepResult::completed(t_end))
     }
 }
 
