@@ -4,7 +4,7 @@
 //! simulation results against analytical solutions, energy balance, and known
 //! thermal properties.
 
-use adml_rc_thermal_single_zone::{FmuFunctions, RcThermalSingleZone};
+use adml_rc_thermal_single_zone::RcThermalSingleZone;
 use approx::assert_relative_eq;
 
 // === Analytical Solution Tests ===
@@ -26,10 +26,10 @@ fn test_analytical_solution_default_parameters() {
 
     // Compare to analytical solution
     let expected = RcThermalSingleZone::analytical_solution(
-        model.R_th,
-        model.C_th,
-        model.T_ambient,
-        model.Q_heat,
+        model.R,
+        model.C,
+        model.T_outdoor,
+        model.Q_heating,
         20.0, // Initial temperature
         t_final,
     );
@@ -46,8 +46,8 @@ fn test_analytical_solution_heating_from_cold() {
     // Test heating up from cold start (T_indoor < T_steady_state)
     let mut model = RcThermalSingleZone::new();
     model.T_indoor = 0.0; // Start at ambient temperature
-    model.T_ambient = 0.0;
-    model.Q_heat = 5000.0;
+    model.T_outdoor = 0.0;
+    model.Q_heating = 5000.0;
 
     let dt = 0.01;
     let t_final = 50000.0; // 50,000 seconds
@@ -58,7 +58,7 @@ fn test_analytical_solution_heating_from_cold() {
     }
 
     let expected = RcThermalSingleZone::analytical_solution(
-        model.R_th, model.C_th, 0.0, 5000.0, 0.0, // Initial at ambient
+        model.R, model.C, 0.0, 5000.0, 0.0, // Initial at ambient
         t_final,
     );
 
@@ -70,8 +70,8 @@ fn test_analytical_solution_cooling_down() {
     // Test cooling down without heating (T_indoor > T_steady_state)
     let mut model = RcThermalSingleZone::new();
     model.T_indoor = 50.0; // Start warm
-    model.T_ambient = 0.0;
-    model.Q_heat = 0.0; // No heating
+    model.T_outdoor = 0.0;
+    model.Q_heating = 0.0; // No heating
 
     let dt = 0.01;
     let t_final = 50000.0;
@@ -82,7 +82,7 @@ fn test_analytical_solution_cooling_down() {
     }
 
     let expected = RcThermalSingleZone::analytical_solution(
-        model.R_th, model.C_th, 0.0, 0.0,  // No heating
+        model.R, model.C, 0.0, 0.0,  // No heating
         50.0, // Initial warm
         t_final,
     );
@@ -95,8 +95,8 @@ fn test_analytical_solution_with_warm_ambient() {
     // Test with non-zero ambient temperature
     let mut model = RcThermalSingleZone::new();
     model.T_indoor = 15.0;
-    model.T_ambient = 10.0;
-    model.Q_heat = 3000.0;
+    model.T_outdoor = 10.0;
+    model.Q_heating = 3000.0;
 
     let dt = 0.01;
     let t_final = 30000.0;
@@ -106,9 +106,8 @@ fn test_analytical_solution_with_warm_ambient() {
         model.do_step(0.0, dt);
     }
 
-    let expected = RcThermalSingleZone::analytical_solution(
-        model.R_th, model.C_th, 10.0, 3000.0, 15.0, t_final,
-    );
+    let expected =
+        RcThermalSingleZone::analytical_solution(model.R, model.C, 10.0, 3000.0, 15.0, t_final);
 
     assert_relative_eq!(model.T_indoor, expected, epsilon = 0.01);
 }
@@ -136,7 +135,7 @@ fn test_reaches_steady_state() {
     assert_relative_eq!(model.T_indoor, expected_ss, epsilon = 0.25);
 
     // dT/dt should be nearly zero (< 0.0001 K/s)
-    assert!(model.dT_dt.abs() < 1e-4);
+    assert!(model.der_T_indoor.abs() < 1e-4);
 }
 
 #[test]
@@ -150,11 +149,11 @@ fn test_steady_state_energy_balance() {
     // Take one step (should stay at steady state)
     model.do_step(0.0, 0.1);
 
-    // Q_heat should equal Q_loss (energy balance)
-    assert_relative_eq!(model.Q_heat, model.Q_loss, epsilon = 0.1);
+    // Q_heating should equal Q_envelope (energy balance)
+    assert_relative_eq!(model.Q_heating, model.Q_envelope, epsilon = 0.1);
 
     // Temperature change should be negligible
-    assert_relative_eq!(model.dT_dt, 0.0, epsilon = 1e-6);
+    assert_relative_eq!(model.der_T_indoor, 0.0, epsilon = 1e-6);
 }
 
 // === Time Constant Tests ===
@@ -191,15 +190,15 @@ fn test_time_constant_affects_response_speed() {
     let mut model1 = RcThermalSingleZone::new();
     let mut model2 = RcThermalSingleZone::new();
 
-    model1.R_th = 0.01;
-    model1.C_th = 10_000_000.0;
+    model1.R = 0.01;
+    model1.C = 10_000_000.0;
     model1.T_indoor = 20.0;
-    model1.Q_heat = 5000.0;
+    model1.Q_heating = 5000.0;
 
-    model2.R_th = 0.01; // Same R
-    model2.C_th = 20_000_000.0; // Double capacitance = double time constant
+    model2.R = 0.01; // Same R
+    model2.C = 20_000_000.0; // Double capacitance = double time constant
     model2.T_indoor = 20.0;
-    model2.Q_heat = 5000.0;
+    model2.Q_heating = 5000.0;
 
     let t_ss1 = model1.steady_state_temperature();
     let t_ss2 = model2.steady_state_temperature();
@@ -231,23 +230,23 @@ fn test_energy_balance_heating() {
     // Energy added by heating should equal energy stored + energy lost
     let mut model = RcThermalSingleZone::new();
     model.T_indoor = 20.0;
-    model.T_ambient = 0.0;
-    model.Q_heat = 5000.0;
+    model.T_outdoor = 0.0;
+    model.Q_heating = 5000.0;
 
     let initial_energy = model.stored_energy();
 
     let dt = 1.0; // 1 second
-    let q_heat_integrated = model.Q_heat * dt;
+    let q_heat_integrated = model.Q_heating * dt;
 
-    // Average Q_loss over the time step (approximate)
-    let q_loss_avg = model.Q_loss * dt;
+    // Average Q_envelope over the time step (approximate)
+    let q_loss_avg = model.Q_envelope * dt;
 
     model.do_step(0.0, dt);
 
     let final_energy = model.stored_energy();
     let energy_change = final_energy - initial_energy;
 
-    // Energy balance: ΔE = Q_heat*dt - Q_loss*dt
+    // Energy balance: ΔE = Q_heating*dt - Q_envelope*dt
     let expected_energy_change = q_heat_integrated - q_loss_avg;
 
     // Allow some tolerance due to averaging and Euler method
@@ -259,8 +258,8 @@ fn test_no_heating_loses_energy() {
     // Without heating, stored energy should decrease (if above ambient)
     let mut model = RcThermalSingleZone::new();
     model.T_indoor = 30.0;
-    model.T_ambient = 0.0;
-    model.Q_heat = 0.0; // No heating
+    model.T_outdoor = 0.0;
+    model.Q_heating = 0.0; // No heating
 
     let initial_energy = model.stored_energy();
 
@@ -322,14 +321,14 @@ fn test_convergence_with_step_size() {
 fn test_insulation_quality_affects_steady_state() {
     // Better insulation (higher R_th) should result in higher steady-state temperature
     let mut model_poor_insulation = RcThermalSingleZone::new();
-    model_poor_insulation.R_th = 0.005; // Poor insulation
+    model_poor_insulation.R = 0.005; // Poor insulation
 
     let mut model_good_insulation = RcThermalSingleZone::new();
-    model_good_insulation.R_th = 0.02; // Good insulation
+    model_good_insulation.R = 0.02; // Good insulation
 
     // Same heating power
-    model_poor_insulation.Q_heat = 5000.0;
-    model_good_insulation.Q_heat = 5000.0;
+    model_poor_insulation.Q_heating = 5000.0;
+    model_good_insulation.Q_heating = 5000.0;
 
     let t_ss_poor = model_poor_insulation.steady_state_temperature();
     let t_ss_good = model_good_insulation.steady_state_temperature();
@@ -344,12 +343,12 @@ fn test_insulation_quality_affects_steady_state() {
 fn test_thermal_mass_affects_time_constant() {
     // Larger thermal mass should result in slower response
     let mut model_low_mass = RcThermalSingleZone::new();
-    model_low_mass.R_th = 0.01;
-    model_low_mass.C_th = 5_000_000.0;
+    model_low_mass.R = 0.01;
+    model_low_mass.C = 5_000_000.0;
 
     let mut model_high_mass = RcThermalSingleZone::new();
-    model_high_mass.R_th = 0.01;
-    model_high_mass.C_th = 20_000_000.0;
+    model_high_mass.R = 0.01;
+    model_high_mass.C = 20_000_000.0;
 
     let tau_low = model_low_mass.time_constant();
     let tau_high = model_high_mass.time_constant();
@@ -372,8 +371,8 @@ fn test_zero_heating() {
     // With zero heating, temperature should approach ambient
     let mut model = RcThermalSingleZone::new();
     model.T_indoor = 30.0;
-    model.T_ambient = 10.0;
-    model.Q_heat = 0.0;
+    model.T_outdoor = 10.0;
+    model.Q_heating = 0.0;
 
     // Simulate for a long time
     let tau = model.time_constant();
@@ -393,7 +392,7 @@ fn test_massive_heating() {
     // Very large heating power should result in high temperature
     let mut model = RcThermalSingleZone::new();
     model.T_indoor = 20.0;
-    model.Q_heat = 50_000.0; // 50 kW - massive heating
+    model.Q_heating = 50_000.0; // 50 kW - massive heating
 
     // Simulate to steady state
     let tau = model.time_constant();
@@ -418,8 +417,8 @@ fn test_negative_ambient_temperature() {
     // System should work correctly with negative ambient temperature (winter)
     let mut model = RcThermalSingleZone::new();
     model.T_indoor = 20.0;
-    model.T_ambient = -20.0; // Cold winter day
-    model.Q_heat = 10_000.0; // Need more heating in winter
+    model.T_outdoor = -20.0; // Cold winter day
+    model.Q_heating = 10_000.0; // Need more heating in winter
 
     let dt = 0.01;
     for _ in 0..10000 {
@@ -428,10 +427,10 @@ fn test_negative_ambient_temperature() {
 
     // Should maintain reasonable indoor temperature
     assert!(model.T_indoor.is_finite());
-    assert!(model.T_indoor > model.T_ambient);
+    assert!(model.T_indoor > model.T_outdoor);
 
     // Heat loss should be positive (losing heat to cold outside)
-    assert!(model.Q_loss > 0.0);
+    assert!(model.Q_envelope > 0.0);
 }
 
 #[test]
@@ -439,8 +438,8 @@ fn test_indoor_equals_ambient_no_heating() {
     // When indoor equals ambient with no heating, should stay constant
     let mut model = RcThermalSingleZone::new();
     model.T_indoor = 15.0;
-    model.T_ambient = 15.0;
-    model.Q_heat = 0.0;
+    model.T_outdoor = 15.0;
+    model.Q_heating = 0.0;
 
     let initial_t = model.T_indoor;
 
@@ -448,8 +447,8 @@ fn test_indoor_equals_ambient_no_heating() {
 
     // No temperature difference and no heating = no change
     assert_relative_eq!(model.T_indoor, initial_t, epsilon = 1e-10);
-    assert_relative_eq!(model.Q_loss, 0.0, epsilon = 1e-10);
-    assert_relative_eq!(model.dT_dt, 0.0, epsilon = 1e-10);
+    assert_relative_eq!(model.Q_envelope, 0.0, epsilon = 1e-10);
+    assert_relative_eq!(model.der_T_indoor, 0.0, epsilon = 1e-10);
 }
 
 // === Edge Case Tests ===

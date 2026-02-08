@@ -19,9 +19,9 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/freol35241/adml"
 
 [workspace.dependencies]
-# FMI export dependencies - using fmu_from_struct temporarily
-# Will migrate to fmi-export once it's published to crates.io
-fmu_from_struct = "0.2"
+# FMI export dependencies - migrated to fmi-export from rust-fmi
+fmi-export = "0.1"
+fmi = "0.6"
 
 # Testing dependencies
 approx = "0.5"

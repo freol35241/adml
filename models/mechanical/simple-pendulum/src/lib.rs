@@ -37,92 +37,110 @@
 //! - Energy calculation (kinetic + potential)
 //! - Valid for large-angle oscillations and continuous rotation
 
-#![allow(clippy::not_unsafe_ptr_arg_deref)]
-#![allow(clippy::ptr_offset_with_cast)]
 #![allow(non_snake_case)]
 
-pub use fmu_from_struct::prelude::*;
+use fmi::fmi3::{Fmi3Error, Fmi3Res};
+use fmi_export::fmi3::{CSDoStepResult, Context, DefaultLoggingCategory, UserModel};
+use fmi_export::FmuModel;
 
 /// Simple pendulum model with nonlinear dynamics
 ///
 /// Models a point mass suspended from a fixed pivot, swinging under gravity
 /// with optional damping.
-#[derive(Fmu, Default, Debug, Clone)]
-#[fmu_from_struct(fmi_version = 3)]
+#[derive(FmuModel, Default, Debug)]
+#[model(co_simulation = true, user_model = false)]
 pub struct SimplePendulum {
     // === Parameters (settable via FMI) ===
     /// Gravitational acceleration [m/s²]
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "9.81")]
+    #[variable(causality = Parameter, start = 9.81, initial = Exact)]
     pub g: f64,
 
     /// Pendulum length [m]
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "1.0")]
+    #[variable(causality = Parameter, start = 1.0, initial = Exact)]
     pub L: f64,
 
     /// Mass of pendulum bob [kg]
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "1.0")]
+    #[variable(causality = Parameter, start = 1.0, initial = Exact)]
     pub m: f64,
 
     /// Damping coefficient [kg/s]
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "0.0")]
+    #[variable(causality = Parameter, start = 0.0, initial = Exact)]
     pub b: f64,
 
     // === State Variables (outputs, read-only via FMI) ===
     /// Angular position [rad], measured from vertical downward equilibrium
     /// Positive values indicate counterclockwise displacement
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "0.1")]
+    #[variable(causality = Output, start = 0.1, initial = Exact)]
     pub theta: f64,
 
     /// Angular velocity [rad/s]
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "0.0")]
+    #[variable(causality = Output, start = 0.0, initial = Exact)]
     pub omega: f64,
 
     // === Derived Outputs (calculated after integration) ===
     /// Total mechanical energy [J]
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "0.0")]
+    #[variable(causality = Output, start = 0.0, initial = Calculated)]
     pub energy: f64,
 
     /// Kinetic energy [J]
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "0.0")]
+    #[variable(causality = Output, start = 0.0, initial = Calculated)]
     pub KE: f64,
 
     /// Potential energy [J], reference at lowest point
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "0.0")]
+    #[variable(causality = Output, start = 0.0, initial = Calculated)]
     pub PE: f64,
 
-    // === Internal (not exposed to FMI) ===
-    pub fmu_info: FmuInfo,
+    /// Derivative of theta
+    #[variable(causality = Local, derivative = theta, initial = Calculated)]
+    der_theta: f64,
+
+    /// Derivative of omega
+    #[variable(causality = Local, derivative = omega, initial = Calculated)]
+    der_omega: f64,
 }
 
-impl FmuFunctions for SimplePendulum {
-    fn exit_initialization_mode(&mut self) {
+impl UserModel for SimplePendulum {
+    type LoggingCategory = DefaultLoggingCategory;
+
+    fn configurate(&mut self, _context: &dyn Context<Self>) -> Result<(), Fmi3Error> {
         // Calculate initial derived outputs
         self.update_derived_outputs();
+        Ok(())
     }
 
-    fn do_step(&mut self, _current_time: f64, time_step: f64) {
+    fn calculate_values(&mut self, _context: &dyn Context<Self>) -> Result<Fmi3Res, Fmi3Error> {
+        self.der_theta = self.omega;
+        self.der_omega = -(self.g / self.L) * self.theta.sin() - (self.b / self.m) * self.omega;
+        Ok(Fmi3Res::OK)
+    }
+
+    fn do_step(
+        &mut self,
+        context: &mut dyn Context<Self>,
+        current_communication_point: f64,
+        communication_step_size: f64,
+        _no_set_fmu_state_prior_to_current_point: bool,
+    ) -> Result<CSDoStepResult, Fmi3Error> {
         // Calculate angular acceleration
-        let der_omega = -(self.g / self.L) * self.theta.sin() - (self.b / self.m) * self.omega;
+        self.der_omega = -(self.g / self.L) * self.theta.sin() - (self.b / self.m) * self.omega;
 
         // Symplectic Euler integration (semi-implicit Euler)
         // Update velocity first using current position
-        self.omega += der_omega * time_step;
+        self.omega += self.der_omega * communication_step_size;
         // Then update position using NEW velocity (this is the key difference)
-        self.theta += self.omega * time_step;
+        self.theta += self.omega * communication_step_size;
+        self.der_theta = self.omega;
 
         // Update derived outputs after integration
         self.update_derived_outputs();
+
+        let target_time = current_communication_point + communication_step_size;
+        context.set_time(target_time);
+        Ok(CSDoStepResult::completed(target_time))
     }
 }
+
+fmi_export::export_fmu!(SimplePendulum);
 
 impl SimplePendulum {
     /// Create a new simple pendulum with default parameters
@@ -137,7 +155,8 @@ impl SimplePendulum {
             energy: 0.0,
             KE: 0.0,
             PE: 0.0,
-            fmu_info: FmuInfo::default(),
+            der_theta: 0.0,
+            der_omega: 0.0,
         };
         pendulum.update_derived_outputs();
         pendulum
@@ -188,6 +207,14 @@ impl SimplePendulum {
     /// For small angles, T = 2π * sqrt(L/g)
     pub fn small_angle_period(L: f64, g: f64) -> f64 {
         2.0 * std::f64::consts::PI * (L / g).sqrt()
+    }
+
+    /// Perform a single symplectic Euler integration step (for testing without FMI context)
+    pub fn do_step(&mut self, _current_time: f64, time_step: f64) {
+        let der_omega = -(self.g / self.L) * self.theta.sin() - (self.b / self.m) * self.omega;
+        self.omega += der_omega * time_step;
+        self.theta += self.omega * time_step;
+        self.update_derived_outputs();
     }
 }
 

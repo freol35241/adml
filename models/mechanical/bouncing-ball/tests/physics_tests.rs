@@ -1,6 +1,6 @@
 //! Physics validation tests for the Bouncing Ball model
 
-use adml_bouncing_ball::{BouncingBall, FmuFunctions};
+use adml_bouncing_ball::BouncingBall;
 use approx::assert_relative_eq;
 
 #[test]

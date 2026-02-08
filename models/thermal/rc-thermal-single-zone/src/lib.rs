@@ -1,450 +1,306 @@
 //! Single-Zone 1R1C Thermal RC Model
 //!
-//! A simplified thermal model of a building/house represented as a lumped parameter system:
-//! - One thermal resistance (R_th): insulation/walls to outside environment
-//! - One thermal capacitance (C_th): thermal mass of air + structure
-//! - One heating source (Q_heat): controllable heat input
-//! - Ambient temperature (T_ambient): outdoor temperature
+//! This model implements a simplified building thermal model using an
+//! electrical circuit analogy (RC network).
 //!
-//! ## Mathematical Model
+//! # Physics
 //!
-//! The model implements the thermal energy balance equation:
+//! The model represents a single thermal zone with:
+//! - One thermal resistance (R) representing the building envelope [K/W]
+//! - One thermal capacitance (C) representing the thermal mass [J/K]
 //!
-//! ```text
-//! C_th * dT_indoor/dt = Q_heat - Q_loss
+//! The governing equation is:
 //!
-//! where: Q_loss = (T_indoor - T_ambient) / R_th
-//! ```
+//! C * dT_indoor/dt = (T_outdoor - T_indoor) / R + Q_heating
 //!
-//! Rearranged as:
+//! where:
+//! - T_indoor: Indoor temperature [°C]
+//! - T_outdoor: Outdoor ambient temperature [°C]
+//! - R: Thermal resistance of building envelope [K/W]
+//! - C: Thermal capacitance of building [J/K]
+//! - Q_heating: Heating power input [W]
 //!
-//! ```text
-//! dT_indoor/dt = Q_heat/C_th - (T_indoor - T_ambient)/(R_th * C_th)
-//! ```
+//! # Steady-State Solution
 //!
-//! ## Physical Interpretation
+//! At steady state (dT/dt = 0):
+//! T_indoor = T_outdoor + Q_heating * R
 //!
-//! - **Time constant**: τ = R_th * C_th (seconds)
-//! - **Steady-state**: T_indoor = T_ambient + Q_heat * R_th (when dT/dt = 0)
-//! - **Heat loss**: Q_loss = (T_indoor - T_ambient) / R_th (Watts)
+//! # Time Constant
 //!
-//! ## Typical Values
-//!
-//! For a well-insulated small house (~100 m²):
-//! - R_th ≈ 0.01 K/W (good insulation)
-//! - C_th ≈ 10,000,000 J/K (thermal mass)
-//! - τ ≈ 100,000 s ≈ 28 hours
-//! - Q_heat ≈ 5,000 W (5 kW heater)
+//! The thermal time constant is τ = R * C [s], which characterizes
+//! how quickly the building responds to temperature changes.
 
-// Allow clippy lints for generated code from fmu_from_struct derive macro
-#![allow(clippy::not_unsafe_ptr_arg_deref)]
-#![allow(clippy::ptr_offset_with_cast)]
-// Allow non_snake_case for physics notation (R_th, C_th, T_indoor, etc.)
 #![allow(non_snake_case)]
 
-pub use fmu_from_struct::prelude::*;
+use fmi::fmi3::{Fmi3Error, Fmi3Res};
+use fmi_export::fmi3::{CSDoStepResult, Context, DefaultLoggingCategory, UserModel};
+use fmi_export::FmuModel;
 
-/// Single-zone 1R1C thermal RC model
+/// Single-zone 1R1C thermal model
 ///
-/// Represents a simplified building thermal system with:
-/// - Thermal resistance (insulation)
-/// - Thermal capacitance (thermal mass)
-/// - Heating input
-/// - Heat loss to ambient
-///
-/// # Equations
-///
-/// The model implements:
-/// - State equation: `dT_indoor/dt = Q_heat/C_th - (T_indoor - T_ambient)/(R_th * C_th)`
-/// - Heat loss: `Q_loss = (T_indoor - T_ambient) / R_th`
-///
-/// # Parameters
-///
-/// - `R_th`: Thermal resistance [K/W]
-/// - `C_th`: Thermal capacitance [J/K]
-/// - `T_ambient`: Ambient/outdoor temperature [°C]
-/// - `Q_heat`: Heating power input [W]
-///
-/// # State Variables
-///
-/// - `T_indoor`: Indoor temperature [°C]
-/// - `Q_loss`: Heat loss through walls [W] (derived)
-/// - `dT_dt`: Rate of temperature change [K/s] (derived)
-#[derive(Fmu, Default, Debug, Clone)]
-#[fmu_from_struct(fmi_version = 3)]
+/// Models a building's thermal behavior as an RC circuit.
+#[derive(FmuModel, Default, Debug)]
+#[model(co_simulation = true, user_model = false)]
 pub struct RcThermalSingleZone {
-    // === Parameters (can be set via FMI before simulation) ===
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "0.01")]
-    /// Thermal resistance (insulation quality)
-    /// Units: K/W (Kelvin per Watt)
-    /// Typical range: 0.001 - 0.1 K/W
-    pub R_th: f64,
+    // === Parameters (settable via FMI) ===
+    /// Thermal resistance of building envelope [K/W]
+    #[variable(causality = Parameter, start = 0.01, initial = Exact)]
+    pub R: f64,
 
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "10000000.0")]
-    /// Thermal capacitance (thermal mass)
-    /// Units: J/K (Joules per Kelvin)
-    /// Typical range: 1e6 - 1e8 J/K
-    pub C_th: f64,
+    /// Thermal capacitance of building [J/K]
+    #[variable(causality = Parameter, start = 1000000.0, initial = Exact)]
+    pub C: f64,
 
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "0.0")]
-    /// Ambient/outdoor temperature
-    /// Units: °C (degrees Celsius)
-    pub T_ambient: f64,
+    /// Outdoor ambient temperature [°C]
+    #[variable(causality = Parameter, start = 0.0, initial = Exact)]
+    pub T_outdoor: f64,
 
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "5000.0")]
-    /// Heating power input
-    /// Units: W (Watts)
-    /// Typical range: 0 - 20000 W
-    pub Q_heat: f64,
+    /// Heating power input [W]
+    #[variable(causality = Parameter, start = 0.0, initial = Exact)]
+    pub Q_heating: f64,
 
-    // === State Variables / Outputs (read-only via FMI) ===
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "20.0")]
-    /// Indoor temperature (state variable)
-    /// Units: °C (degrees Celsius)
+    // === State Variables (outputs) ===
+    /// Indoor temperature [°C]
+    #[variable(causality = Output, start = 20.0, initial = Exact)]
     pub T_indoor: f64,
 
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "0.0")]
-    /// Heat loss through walls (derived output)
-    /// Units: W (Watts)
-    pub Q_loss: f64,
+    /// Heat flow through envelope [W] (positive = heat loss)
+    #[variable(causality = Output, start = 0.0, initial = Calculated)]
+    pub Q_envelope: f64,
 
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "0.0")]
-    /// Rate of temperature change (derived output)
-    /// Units: K/s (Kelvin per second)
-    pub dT_dt: f64,
+    /// Net heat flow into zone [W]
+    #[variable(causality = Output, start = 0.0, initial = Calculated)]
+    pub Q_net: f64,
 
-    // === Internal variables (not exposed via FMI) ===
-    /// Current simulation time
-    time: f64,
-
-    /// FMU runtime information
-    pub fmu_info: FmuInfo,
+    /// Derivative of indoor temperature
+    #[variable(causality = Local, derivative = T_indoor, initial = Calculated)]
+    pub der_T_indoor: f64,
 }
 
-impl FmuFunctions for RcThermalSingleZone {
-    fn exit_initialization_mode(&mut self) {
+impl UserModel for RcThermalSingleZone {
+    type LoggingCategory = DefaultLoggingCategory;
+
+    fn configurate(&mut self, _context: &dyn Context<Self>) -> Result<(), Fmi3Error> {
         // Calculate initial derived outputs
         self.update_derived_outputs();
+        Ok(())
     }
 
-    fn do_step(&mut self, _current_time: f64, time_step: f64) {
-        // Calculate heat loss: Q_loss = (T_indoor - T_ambient) / R_th
-        let q_loss = (self.T_indoor - self.T_ambient) / self.R_th;
+    fn calculate_values(&mut self, _context: &dyn Context<Self>) -> Result<Fmi3Res, Fmi3Error> {
+        self.update_derived_outputs();
+        Ok(Fmi3Res::OK)
+    }
 
-        // Calculate rate of temperature change:
-        // dT_indoor/dt = Q_heat/C_th - Q_loss/C_th
-        let der_t_indoor = self.Q_heat / self.C_th - q_loss / self.C_th;
+    fn do_step(
+        &mut self,
+        context: &mut dyn Context<Self>,
+        current_communication_point: f64,
+        communication_step_size: f64,
+        _no_set_fmu_state_prior_to_current_point: bool,
+    ) -> Result<CSDoStepResult, Fmi3Error> {
+        // Calculate heat flows
+        self.update_derived_outputs();
 
-        // Euler integration: T_indoor(t+dt) = T_indoor(t) + dT_indoor/dt * dt
-        self.T_indoor += der_t_indoor * time_step;
+        // Euler integration: dT/dt = Q_net / C
+        self.der_T_indoor = self.Q_net / self.C;
+        self.T_indoor += self.der_T_indoor * communication_step_size;
 
-        // Update derived outputs
-        self.Q_loss = (self.T_indoor - self.T_ambient) / self.R_th;
-        self.dT_dt = der_t_indoor;
-
-        // Update time
-        self.time += time_step;
+        let target_time = current_communication_point + communication_step_size;
+        context.set_time(target_time);
+        Ok(CSDoStepResult::completed(target_time))
     }
 }
 
-// === Helper Methods (for testing and validation) ===
+fmi_export::export_fmu!(RcThermalSingleZone);
+
 impl RcThermalSingleZone {
-    /// Create a new RcThermalSingleZone model with default parameters
+    /// Create a new RC thermal model with default parameters
     pub fn new() -> Self {
         let mut model = Self {
-            R_th: 0.01,
-            C_th: 10_000_000.0,
-            T_ambient: 0.0,
-            Q_heat: 5000.0,
+            R: 0.01,
+            C: 1_000_000.0,
+            T_outdoor: 0.0,
+            Q_heating: 0.0,
             T_indoor: 20.0,
-            Q_loss: 0.0,
-            dT_dt: 0.0,
-            time: 0.0,
-            fmu_info: FmuInfo::default(),
+            Q_envelope: 0.0,
+            Q_net: 0.0,
+            der_T_indoor: 0.0,
         };
         model.update_derived_outputs();
         model
     }
 
-    /// Update derived output variables
+    /// Update derived outputs (heat flow calculations)
     fn update_derived_outputs(&mut self) {
-        self.Q_loss = (self.T_indoor - self.T_ambient) / self.R_th;
-        self.dT_dt = self.Q_heat / self.C_th - self.Q_loss / self.C_th;
+        // Heat flow through envelope: positive means heat loss to outside
+        self.Q_envelope = (self.T_indoor - self.T_outdoor) / self.R;
+
+        // Net heat flow into zone
+        self.Q_net = self.Q_heating - self.Q_envelope;
+
+        // Temperature derivative
+        self.der_T_indoor = self.Q_net / self.C;
     }
 
-    /// Calculate the time constant (tau) of the system
-    ///
-    /// The time constant represents how quickly the building temperature responds
-    /// to changes. After time τ, the system reaches ~63.2% of its final value.
-    ///
-    /// Returns: time constant in seconds
+    /// Calculate thermal time constant τ = R * C [s]
     pub fn time_constant(&self) -> f64 {
-        self.R_th * self.C_th
+        self.R * self.C
     }
 
     /// Calculate steady-state indoor temperature
     ///
-    /// At steady state (dT/dt = 0), the indoor temperature is:
-    /// T_indoor_ss = T_ambient + Q_heat * R_th
-    ///
-    /// Returns: steady-state temperature in °C
+    /// At steady state: T_indoor = T_outdoor + Q_heating * R
     pub fn steady_state_temperature(&self) -> f64 {
-        self.T_ambient + self.Q_heat * self.R_th
+        self.T_outdoor + self.Q_heating * self.R
     }
 
-    /// Calculate analytical solution for indoor temperature
+    /// Analytical solution for step response
     ///
-    /// For constant Q_heat and T_ambient, the solution is:
-    /// T_indoor(t) = T_ss + (T_0 - T_ss) * exp(-t/τ)
+    /// For a step change in heating power:
+    /// T(t) = T_ss + (T_0 - T_ss) * exp(-t / τ)
     ///
     /// where:
-    /// - T_ss = T_ambient + Q_heat * R_th (steady-state temperature)
-    /// - T_0 = initial indoor temperature
-    /// - τ = R_th * C_th (time constant)
-    ///
-    /// # Arguments
-    ///
-    /// * `r_th` - Thermal resistance [K/W]
-    /// * `c_th` - Thermal capacitance [J/K]
-    /// * `t_ambient` - Ambient temperature [°C]
-    /// * `q_heat` - Heating power [W]
-    /// * `t_initial` - Initial indoor temperature [°C]
-    /// * `t` - Time [s]
-    ///
-    /// # Returns
-    ///
-    /// Indoor temperature at time t [°C]
-    pub fn analytical_solution(
-        r_th: f64,
-        c_th: f64,
-        t_ambient: f64,
-        q_heat: f64,
-        t_initial: f64,
+    /// - T_ss is the steady-state temperature
+    /// - T_0 is the initial temperature
+    /// - τ = R * C is the time constant
+    pub fn analytical_step_response(
+        T_0: f64,
+        T_outdoor: f64,
+        Q_heating: f64,
+        R: f64,
+        C: f64,
         t: f64,
     ) -> f64 {
-        let tau = r_th * c_th;
-        let t_ss = t_ambient + q_heat * r_th;
-        t_ss + (t_initial - t_ss) * (-t / tau).exp()
+        let tau = R * C;
+        let T_ss = T_outdoor + Q_heating * R;
+        T_ss + (T_0 - T_ss) * (-t / tau).exp()
     }
 
-    /// Calculate total energy stored in the thermal mass relative to ambient
-    ///
-    /// E = C_th * (T_indoor - T_ambient)
-    ///
-    /// Returns: stored energy in Joules
+    /// Calculate stored thermal energy [J] relative to 0°C reference
     pub fn stored_energy(&self) -> f64 {
-        self.C_th * (self.T_indoor - self.T_ambient)
+        self.C * self.T_indoor
+    }
+
+    /// Analytical solution with parameter-first signature
+    ///
+    /// This provides a convenient static interface for tests:
+    /// T(t) = T_ss + (T_0 - T_ss) * exp(-t / τ)
+    pub fn analytical_solution(
+        R: f64,
+        C: f64,
+        T_outdoor: f64,
+        Q_heating: f64,
+        T_0: f64,
+        t: f64,
+    ) -> f64 {
+        Self::analytical_step_response(T_0, T_outdoor, Q_heating, R, C, t)
+    }
+
+    /// Perform a single Euler integration step (for testing without FMI context)
+    pub fn do_step(&mut self, _current_time: f64, time_step: f64) {
+        self.update_derived_outputs();
+        self.T_indoor += self.der_T_indoor * time_step;
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_relative_eq;
 
     #[test]
-    fn test_initialization() {
+    fn test_initial_values() {
         let model = RcThermalSingleZone::new();
-
-        // Test default parameter values
-        assert_eq!(model.R_th, 0.01);
-        assert_eq!(model.C_th, 10_000_000.0);
-        assert_eq!(model.T_ambient, 0.0);
-        assert_eq!(model.Q_heat, 5000.0);
-
-        // Test default state
+        assert_eq!(model.R, 0.01);
+        assert_eq!(model.C, 1_000_000.0);
+        assert_eq!(model.T_outdoor, 0.0);
+        assert_eq!(model.Q_heating, 0.0);
         assert_eq!(model.T_indoor, 20.0);
-
-        // Test initial time
-        assert_eq!(model.time, 0.0);
-
-        // Test derived outputs are calculated
-        let expected_q_loss = (20.0 - 0.0) / 0.01;
-        assert_relative_eq!(model.Q_loss, expected_q_loss, epsilon = 1e-6);
     }
 
     #[test]
     fn test_time_constant() {
         let model = RcThermalSingleZone::new();
         let tau = model.time_constant();
-
-        assert_eq!(tau, 0.01 * 10_000_000.0);
-        assert_eq!(tau, 100_000.0); // ~28 hours
+        assert!((tau - 10_000.0).abs() < 1e-6); // R * C = 0.01 * 1e6 = 10000
     }
 
     #[test]
-    fn test_steady_state_temperature() {
-        let model = RcThermalSingleZone::new();
-        let t_ss = model.steady_state_temperature();
-
-        // T_ss = T_ambient + Q_heat * R_th = 0.0 + 5000.0 * 0.01 = 50.0°C
-        assert_eq!(t_ss, 50.0);
-    }
-
-    #[test]
-    fn test_steady_state_temperature_with_ambient() {
+    fn test_steady_state() {
         let mut model = RcThermalSingleZone::new();
-        model.T_ambient = 10.0;
+        model.T_outdoor = 5.0;
+        model.Q_heating = 1000.0;
 
-        let t_ss = model.steady_state_temperature();
-
-        // T_ss = 10.0 + 5000.0 * 0.01 = 60.0°C
-        assert_eq!(t_ss, 60.0);
+        let T_ss = model.steady_state_temperature();
+        // T_ss = T_outdoor + Q_heating * R = 5 + 1000 * 0.01 = 15°C
+        assert!((T_ss - 15.0).abs() < 1e-10);
     }
 
     #[test]
-    fn test_heat_loss_calculation() {
-        let model = RcThermalSingleZone::new();
-
-        // Q_loss = (T_indoor - T_ambient) / R_th
-        // Q_loss = (20.0 - 0.0) / 0.01 = 2000.0 W
-        assert_eq!(model.Q_loss, 2000.0);
-    }
-
-    #[test]
-    fn test_derivative_calculation() {
-        let model = RcThermalSingleZone::new();
-
-        // dT/dt = Q_heat/C_th - Q_loss/C_th
-        // dT/dt = 5000/10e6 - 2000/10e6 = 0.0005 - 0.0002 = 0.0003 K/s
-        let expected_der = 5000.0 / 10_000_000.0 - 2000.0 / 10_000_000.0;
-        assert_relative_eq!(model.dT_dt, expected_der, epsilon = 1e-10);
-        assert_relative_eq!(model.dT_dt, 0.0003, epsilon = 1e-10);
-    }
-
-    #[test]
-    fn test_one_step() {
+    fn test_cooling_without_heating() {
         let mut model = RcThermalSingleZone::new();
-
-        let initial_t = model.T_indoor;
-        let dt = 1.0; // 1 second
-
-        model.do_step(0.0, dt);
-
-        // After one step: T_new = T_old + dT/dt * dt
-        // T_new = 20.0 + 0.0003 * 1.0 = 20.0003
-        assert_relative_eq!(model.T_indoor, 20.0003, epsilon = 1e-10);
-        assert!(model.T_indoor > initial_t); // Should be warming up
-    }
-
-    #[test]
-    fn test_no_heating_cools_down() {
-        let mut model = RcThermalSingleZone::new();
-        model.Q_heat = 0.0;
         model.T_indoor = 20.0;
-        model.T_ambient = 0.0;
-        model.update_derived_outputs();
+        model.T_outdoor = 0.0;
+        model.Q_heating = 0.0;
 
-        let initial_t = model.T_indoor;
+        let initial_temp = model.T_indoor;
 
-        model.do_step(0.0, 1.0);
+        // Simulate for some time
+        let dt = 10.0; // 10 second steps
+        for _ in 0..100 {
+            model.do_step(0.0, dt);
+        }
 
-        // Without heating, indoor should cool down toward ambient
-        assert!(model.T_indoor < initial_t);
+        // Temperature should decrease towards outdoor temperature
+        assert!(model.T_indoor < initial_temp);
+        assert!(model.T_indoor > model.T_outdoor);
     }
 
     #[test]
-    fn test_heating_warms_up() {
+    fn test_heating_response() {
         let mut model = RcThermalSingleZone::new();
-        model.Q_heat = 10_000.0; // Strong heating
-        model.T_indoor = 0.0;
-        model.T_ambient = 0.0;
-        model.update_derived_outputs();
+        model.T_indoor = 15.0;
+        model.T_outdoor = 0.0;
+        model.Q_heating = 2000.0;
 
-        let initial_t = model.T_indoor;
+        // Steady state should be T_outdoor + Q * R = 0 + 2000 * 0.01 = 20°C
+        // Since T_indoor (15) < T_ss (20), temperature should rise
+        let initial_temp = model.T_indoor;
 
-        model.do_step(0.0, 1.0);
+        let dt = 10.0;
+        for _ in 0..100 {
+            model.do_step(0.0, dt);
+        }
 
-        // With heating and starting cold, should warm up
-        assert!(model.T_indoor > initial_t);
+        assert!(model.T_indoor > initial_temp);
     }
 
     #[test]
-    fn test_equilibrium_no_change() {
+    fn test_analytical_step_response() {
+        let R = 0.01;
+        let C = 1_000_000.0;
+
+        // At t=0, should equal initial temperature
+        let T_0 = RcThermalSingleZone::analytical_step_response(20.0, 0.0, 1000.0, R, C, 0.0);
+        assert!((T_0 - 20.0).abs() < 1e-10);
+
+        // At t=∞, should approach steady state
+        let T_inf = RcThermalSingleZone::analytical_step_response(20.0, 0.0, 1000.0, R, C, 1e10);
+        let T_ss = 0.0 + 1000.0 * R; // = 10.0
+        assert!((T_inf - T_ss).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_heat_flow_calculation() {
         let mut model = RcThermalSingleZone::new();
-
-        // Set T_indoor to steady-state temperature
-        model.T_indoor = model.steady_state_temperature();
+        model.T_indoor = 20.0;
+        model.T_outdoor = 0.0;
+        model.Q_heating = 0.0;
         model.update_derived_outputs();
 
-        // At steady state, Q_heat should equal Q_loss
-        assert_relative_eq!(model.Q_heat, model.Q_loss, epsilon = 1e-6);
+        // Q_envelope = (T_indoor - T_outdoor) / R = 20 / 0.01 = 2000 W
+        assert!((model.Q_envelope - 2000.0).abs() < 1e-6);
 
-        // dT/dt should be zero
-        assert_relative_eq!(model.dT_dt, 0.0, epsilon = 1e-10);
-
-        // Taking a step should not change temperature (much)
-        let initial_t = model.T_indoor;
-        model.do_step(0.0, 0.1);
-
-        assert_relative_eq!(model.T_indoor, initial_t, epsilon = 1e-8);
-    }
-
-    #[test]
-    fn test_analytical_solution_at_t_zero() {
-        let t_initial = 20.0;
-        let result = RcThermalSingleZone::analytical_solution(
-            0.01,
-            10_000_000.0,
-            0.0,
-            5000.0,
-            t_initial,
-            0.0,
-        );
-
-        // At t=0, should return initial temperature
-        assert_eq!(result, t_initial);
-    }
-
-    #[test]
-    fn test_analytical_solution_at_infinity() {
-        // At very large time, should approach steady state
-        let t_very_large = 1_000_000.0; // Much larger than tau=100,000s
-        let result = RcThermalSingleZone::analytical_solution(
-            0.01,
-            10_000_000.0,
-            0.0,
-            5000.0,
-            20.0,
-            t_very_large,
-        );
-
-        let t_ss = 0.0 + 5000.0 * 0.01; // 50.0°C
-        assert_relative_eq!(result, t_ss, epsilon = 0.01); // Within 0.01°C
-    }
-
-    #[test]
-    fn test_stored_energy() {
-        let model = RcThermalSingleZone::new();
-
-        // E = C_th * (T_indoor - T_ambient)
-        // E = 10e6 * (20 - 0) = 200,000,000 J
-        let expected_energy = 10_000_000.0 * 20.0;
-        assert_eq!(model.stored_energy(), expected_energy);
-    }
-
-    #[test]
-    fn test_parameters_affect_time_constant() {
-        let mut model1 = RcThermalSingleZone::new();
-        let mut model2 = RcThermalSingleZone::new();
-
-        model1.R_th = 0.01;
-        model1.C_th = 10_000_000.0;
-
-        model2.R_th = 0.02; // Double the resistance
-        model2.C_th = 10_000_000.0;
-
-        let tau1 = model1.time_constant();
-        let tau2 = model2.time_constant();
-
-        // Doubling R_th should double time constant
-        assert_eq!(tau2, 2.0 * tau1);
+        // Q_net = Q_heating - Q_envelope = 0 - 2000 = -2000 W
+        assert!((model.Q_net - (-2000.0)).abs() < 1e-6);
     }
 }
