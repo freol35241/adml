@@ -19,6 +19,11 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/freol35241/adml"
 
+# Allow coverage_nightly cfg from upstream fmi-export macros
+[workspace.lints.rust.unexpected_cfgs]
+level = "allow"
+check-cfg = ['cfg(coverage_nightly)']
+
 [workspace.dependencies]
 # FMI export dependencies - migrated to fmi-export from rust-fmi
 fmi-export = "0.1"

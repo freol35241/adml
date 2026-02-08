@@ -19,6 +19,9 @@ adml-solver = { workspace = true }
 physics-framework = { path = "../../../testing/physics-framework" }
 approx = { workspace = true }
 
+[lints]
+workspace = true
+
 # FMI-specific metadata
 [package.metadata.fmi]
 model_name = "Lorenz"
