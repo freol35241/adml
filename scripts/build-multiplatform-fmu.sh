@@ -89,10 +89,6 @@ FMU_OUTPUT_DIR="fmus"
 mkdir -p "$FMU_OUTPUT_DIR"
 cp "$FMU_TEMP_DIR/${OUTPUT_FMU_NAME}.fmu" "$FMU_OUTPUT_DIR/"
 
-# Fix ModelStructure element ordering (workaround for fmi-export v0.1.1 bug)
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-python3 "$SCRIPT_DIR/fix_model_structure.py" "$FMU_OUTPUT_DIR/${OUTPUT_FMU_NAME}.fmu"
-
 # Cleanup
 rm -rf "$FMU_TEMP_DIR"
 

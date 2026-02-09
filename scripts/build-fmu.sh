@@ -61,10 +61,6 @@ else
 fi
 cp "$FMU_FILE" "$OUTPUT_FMU"
 
-# Fix ModelStructure element ordering (workaround for fmi-export v0.1.1 bug)
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-python3 "$SCRIPT_DIR/fix_model_structure.py" "$OUTPUT_FMU"
-
 echo "=========================================="
 echo "FMU created: $OUTPUT_FMU"
 echo "=========================================="
