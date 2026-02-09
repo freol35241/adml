@@ -16,8 +16,18 @@ image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:latest"
 # Use edge tag - the :latest tag has outdated MinGW-w64 missing GetHostNameW in ws2_32
 # See: https://sourceforge.net/p/mingw-w64/bugs/899/
 image = "ghcr.io/cross-rs/x86_64-pc-windows-gnu:edge"
-# Install libclang-dev for bindgen (required by fmi-sys)
-pre-build = ["apt-get update && apt-get install -y libclang-dev"]
+# Install libclang-dev for bindgen (required by fmi-sys) and create a stable symlink
+# to the clang built-in include dir (contains stdbool.h needed by bindgen with --sysroot)
+pre-build = [
+    "apt-get update && apt-get install -y libclang-dev && ln -sf $(ls -d /usr/lib/llvm-*/lib/clang/*/include | head -1) /usr/local/clang-include",
+]
+
+[target.x86_64-pc-windows-gnu.env]
+# The cross image sets --sysroot which hides clang's built-in headers (stdbool.h etc).
+# Add the clang include dir as a fallback search path for bindgen.
+passthrough = [
+    "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_gnu=--sysroot=/usr/x86_64-w64-mingw32 -idirafter/usr/include -idirafter/usr/local/clang-include",
+]
 
 [target.aarch64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:latest"
