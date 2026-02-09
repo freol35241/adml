@@ -9,11 +9,9 @@
 //! a stable limit cycle. The Van der Pol oscillator is important in
 //! studying self-sustaining oscillations in various physical systems.
 
-// Allow clippy lints for generated code from fmu_from_struct derive macro
-#![allow(clippy::not_unsafe_ptr_arg_deref)]
-#![allow(clippy::ptr_offset_with_cast)]
-
-pub use fmu_from_struct::prelude::*;
+use fmi::fmi3::{Fmi3Error, Fmi3Res};
+use fmi_export::fmi3::{Context, DefaultLoggingCategory, UserModel};
+use fmi_export::FmuModel;
 
 /// Van der Pol oscillator model
 ///
@@ -24,46 +22,43 @@ pub use fmu_from_struct::prelude::*;
 /// This is implemented as a system of first-order ODEs:
 /// - der(x0) = x1
 /// - der(x1) = μ(1 - x0²)x1 - x0
-#[derive(Fmu, Default, Debug, Clone)]
-#[fmu_from_struct(fmi_version = 3)]
+#[derive(FmuModel, Default, Debug)]
+#[model(co_simulation = true, user_model = false)]
 pub struct VanDerPol {
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "1.0")]
     /// Damping parameter μ
+    #[variable(causality = Parameter, start = 1.0, initial = Exact)]
     pub mu: f64,
 
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "2.0")]
     /// State variable x0 (position-like)
+    #[variable(causality = Output, start = 2.0, initial = Exact)]
     pub x0: f64,
 
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "0.0")]
     /// State variable x1 (velocity-like)
+    #[variable(causality = Output, start = 0.0, initial = Exact)]
     pub x1: f64,
 
-    /// FMU runtime information (optional)
-    pub fmu_info: FmuInfo,
+    /// Derivative of x0
+    #[variable(causality = Local, derivative = x0, initial = Calculated)]
+    der_x0: f64,
+
+    /// Derivative of x1
+    #[variable(causality = Local, derivative = x1, initial = Calculated)]
+    der_x1: f64,
 }
 
-impl FmuFunctions for VanDerPol {
-    fn exit_initialization_mode(&mut self) {
-        // Nothing special needed for initialization
+impl UserModel for VanDerPol {
+    type LoggingCategory = DefaultLoggingCategory;
+
+    fn calculate_values(&mut self, _context: &dyn Context<Self>) -> Result<Fmi3Res, Fmi3Error> {
+        self.der_x0 = self.x1;
+        self.der_x1 = self.mu * (1.0 - self.x0 * self.x0) * self.x1 - self.x0;
+        Ok(Fmi3Res::OK)
     }
 
-    fn do_step(&mut self, _current_time: f64, time_step: f64) {
-        // Calculate derivatives according to Van der Pol equations:
-        // der(x0) = x1
-        let der_x0 = self.x1;
-
-        // der(x1) = mu * (1 - x0²) * x1 - x0
-        let der_x1 = self.mu * (1.0 - self.x0 * self.x0) * self.x1 - self.x0;
-
-        // Euler integration: x_new = x + der(x) * dt
-        self.x0 += der_x0 * time_step;
-        self.x1 += der_x1 * time_step;
-    }
+    adml_solver::euler_cs_step!(0.0001);
 }
+
+fmi_export::export_fmu!(VanDerPol);
 
 impl VanDerPol {
     /// Create a new Van der Pol oscillator with default parameters
@@ -72,13 +67,22 @@ impl VanDerPol {
             mu: 1.0,
             x0: 2.0,
             x1: 0.0,
-            fmu_info: FmuInfo::default(),
+            der_x0: 0.0,
+            der_x1: 0.0,
         }
     }
 
     /// Calculate total energy (not conserved for Van der Pol)
     pub fn total_energy(&self) -> f64 {
         0.5 * self.x0 * self.x0 + 0.5 * self.x1 * self.x1
+    }
+
+    /// Perform a single Euler integration step (for testing without FMI context)
+    pub fn do_step(&mut self, _current_time: f64, time_step: f64) {
+        let der_x0 = self.x1;
+        let der_x1 = self.mu * (1.0 - self.x0 * self.x0) * self.x1 - self.x0;
+        self.x0 += der_x0 * time_step;
+        self.x1 += der_x1 * time_step;
     }
 }
 

@@ -17,11 +17,9 @@
 //!
 //! Classic chaotic parameters: σ=10, ρ=28, β=8/3
 
-// Allow clippy lints for generated code from fmu_from_struct derive macro
-#![allow(clippy::not_unsafe_ptr_arg_deref)]
-#![allow(clippy::ptr_offset_with_cast)]
-
-pub use fmu_from_struct::prelude::*;
+use fmi::fmi3::{Fmi3Error, Fmi3Res};
+use fmi_export::fmi3::{Context, DefaultLoggingCategory, UserModel};
+use fmi_export::FmuModel;
 
 /// Lorenz system model
 ///
@@ -33,65 +31,60 @@ pub use fmu_from_struct::prelude::*;
 /// - der(x) = sigma * (y - x)
 /// - der(y) = x * (rho - z) - y
 /// - der(z) = x * y - beta * z
-#[derive(Fmu, Default, Debug, Clone)]
-#[fmu_from_struct(fmi_version = 3)]
+#[derive(FmuModel, Default, Debug)]
+#[model(co_simulation = true, user_model = false)]
 pub struct Lorenz {
     /// Prandtl number (sigma) - ratio of momentum diffusivity to thermal diffusivity
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "10.0")]
+    #[variable(causality = Parameter, start = 10.0, initial = Exact)]
     pub sigma: f64,
 
     /// Rayleigh number (rho) - ratio of buoyancy to viscous forces
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "28.0")]
+    #[variable(causality = Parameter, start = 28.0, initial = Exact)]
     pub rho: f64,
 
     /// Geometric factor (beta)
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "2.6666666666666665")]
+    #[variable(causality = Parameter, start = 2.6666666666666665, initial = Exact)]
     pub beta: f64,
 
     /// State variable x
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "1.0")]
+    #[variable(causality = Output, start = 1.0, initial = Exact)]
     pub x: f64,
 
     /// State variable y
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "1.0")]
+    #[variable(causality = Output, start = 1.0, initial = Exact)]
     pub y: f64,
 
     /// State variable z
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "1.0")]
+    #[variable(causality = Output, start = 1.0, initial = Exact)]
     pub z: f64,
 
-    /// FMU runtime information (optional)
-    pub fmu_info: FmuInfo,
+    /// Derivative of x
+    #[variable(causality = Local, derivative = x, initial = Calculated)]
+    der_x: f64,
+
+    /// Derivative of y
+    #[variable(causality = Local, derivative = y, initial = Calculated)]
+    der_y: f64,
+
+    /// Derivative of z
+    #[variable(causality = Local, derivative = z, initial = Calculated)]
+    der_z: f64,
 }
 
-impl FmuFunctions for Lorenz {
-    fn exit_initialization_mode(&mut self) {
-        // Nothing special needed for initialization
+impl UserModel for Lorenz {
+    type LoggingCategory = DefaultLoggingCategory;
+
+    fn calculate_values(&mut self, _context: &dyn Context<Self>) -> Result<Fmi3Res, Fmi3Error> {
+        self.der_x = self.sigma * (self.y - self.x);
+        self.der_y = self.x * (self.rho - self.z) - self.y;
+        self.der_z = self.x * self.y - self.beta * self.z;
+        Ok(Fmi3Res::OK)
     }
 
-    fn do_step(&mut self, _current_time: f64, time_step: f64) {
-        // Calculate derivatives according to Lorenz equations:
-        // der(x) = sigma * (y - x)
-        let der_x = self.sigma * (self.y - self.x);
-
-        // der(y) = x * (rho - z) - y
-        let der_y = self.x * (self.rho - self.z) - self.y;
-
-        // der(z) = x * y - beta * z
-        let der_z = self.x * self.y - self.beta * self.z;
-
-        // Euler integration: state_new = state + der(state) * dt
-        self.x += der_x * time_step;
-        self.y += der_y * time_step;
-        self.z += der_z * time_step;
-    }
+    adml_solver::euler_cs_step!(0.0001);
 }
+
+fmi_export::export_fmu!(Lorenz);
 
 impl Lorenz {
     /// Create a new Lorenz system with classic chaotic parameters
@@ -103,7 +96,9 @@ impl Lorenz {
             x: 1.0,
             y: 1.0,
             z: 1.0,
-            fmu_info: FmuInfo::default(),
+            der_x: 0.0,
+            der_y: 0.0,
+            der_z: 0.0,
         }
     }
 
@@ -116,7 +111,9 @@ impl Lorenz {
             x: 1.0,
             y: 1.0,
             z: 1.0,
-            fmu_info: FmuInfo::default(),
+            der_x: 0.0,
+            der_y: 0.0,
+            der_z: 0.0,
         }
     }
 
@@ -140,6 +137,16 @@ impl Lorenz {
             let eq_minus = (-c, -c, self.rho - 1.0);
             [origin, eq_plus, eq_minus]
         }
+    }
+
+    /// Perform a single Euler integration step (for testing without FMI context)
+    pub fn do_step(&mut self, _current_time: f64, time_step: f64) {
+        let der_x = self.sigma * (self.y - self.x);
+        let der_y = self.x * (self.rho - self.z) - self.y;
+        let der_z = self.x * self.y - self.beta * self.z;
+        self.x += der_x * time_step;
+        self.y += der_y * time_step;
+        self.z += der_z * time_step;
     }
 }
 

@@ -49,7 +49,7 @@ class TestBouncingBallFMUStructure:
         metadata = validate_fmu_structure(fmu_path)
 
         assert metadata['fmi_version'] == '3.0'
-        assert metadata['model_name'] == 'BouncingBall'
+        assert metadata['model_name'] == 'adml-bouncing-ball'
         assert metadata['cosimulation_supported'] == True
 
     def test_fmu_variables(self, fmu_path):

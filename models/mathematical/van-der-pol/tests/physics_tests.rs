@@ -1,6 +1,6 @@
 //! Physics validation tests for the Van der Pol oscillator
 
-use adml_van_der_pol::{FmuFunctions, VanDerPol};
+use adml_van_der_pol::VanDerPol;
 use approx::assert_relative_eq;
 
 #[test]

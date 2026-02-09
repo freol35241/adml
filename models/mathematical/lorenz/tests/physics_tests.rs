@@ -1,6 +1,6 @@
 //! Physics validation tests for the Lorenz system
 
-use adml_lorenz::{FmuFunctions, Lorenz};
+use adml_lorenz::Lorenz;
 use approx::assert_relative_eq;
 
 #[test]

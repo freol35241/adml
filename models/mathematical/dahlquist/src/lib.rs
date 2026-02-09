@@ -11,44 +11,41 @@
 //!
 //! The Dahlquist test equation is particularly useful for analyzing stiff solvers.
 
-// Allow clippy lints for generated code from fmu_from_struct derive macro
-#![allow(clippy::not_unsafe_ptr_arg_deref)]
-#![allow(clippy::ptr_offset_with_cast)]
-
-pub use fmu_from_struct::prelude::*;
+use fmi::fmi3::{Fmi3Error, Fmi3Res};
+use fmi_export::fmi3::{Context, DefaultLoggingCategory, UserModel};
+use fmi_export::FmuModel;
 
 /// Dahlquist test equation model
 ///
 /// This implements a simple first-order linear ODE: der(x) = -k * x
-#[derive(Fmu, Default, Debug, Clone)]
-#[fmu_from_struct(fmi_version = 3)]
+#[derive(FmuModel, Default, Debug)]
+#[model(co_simulation = true, user_model = false)]
 pub struct Dahlquist {
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "1.0")]
     /// Decay constant k
+    #[variable(causality = Parameter, start = 1.0, initial = Exact)]
     pub k: f64,
 
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "1.0")]
     /// State variable x
+    #[variable(causality = Output, start = 1.0, initial = Exact)]
     pub x: f64,
 
-    /// FMU runtime information (optional)
-    pub fmu_info: FmuInfo,
+    /// Derivative of x (der_x = -k * x)
+    #[variable(causality = Local, derivative = x, initial = Calculated)]
+    der_x: f64,
 }
 
-impl FmuFunctions for Dahlquist {
-    fn exit_initialization_mode(&mut self) {
-        // Nothing special needed for initialization
+impl UserModel for Dahlquist {
+    type LoggingCategory = DefaultLoggingCategory;
+
+    fn calculate_values(&mut self, _context: &dyn Context<Self>) -> Result<Fmi3Res, Fmi3Error> {
+        self.der_x = -self.k * self.x;
+        Ok(Fmi3Res::OK)
     }
 
-    fn do_step(&mut self, _current_time: f64, time_step: f64) {
-        // Euler integration: x = x + dx/dt * dt
-        // where dx/dt = -k * x
-        let der_x = -self.k * self.x;
-        self.x += der_x * time_step;
-    }
+    adml_solver::euler_cs_step!(0.001);
 }
+
+fmi_export::export_fmu!(Dahlquist);
 
 impl Dahlquist {
     /// Create a new Dahlquist model with default parameters
@@ -56,13 +53,19 @@ impl Dahlquist {
         Self {
             k: 1.0,
             x: 1.0,
-            fmu_info: FmuInfo::default(),
+            der_x: -1.0,
         }
     }
 
     /// Get the analytical solution at time t from initial value x0
     pub fn analytical_solution(x0: f64, k: f64, t: f64) -> f64 {
         x0 * (-k * t).exp()
+    }
+
+    /// Perform a single Euler integration step (for testing without FMI context)
+    pub fn do_step(&mut self, _current_time: f64, time_step: f64) {
+        self.der_x = -self.k * self.x;
+        self.x += self.der_x * time_step;
     }
 }
 

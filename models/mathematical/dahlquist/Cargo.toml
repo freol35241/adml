@@ -11,11 +11,16 @@ repository.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-fmu_from_struct = { workspace = true }
+fmi-export = { workspace = true }
+fmi = { workspace = true }
+adml-solver = { workspace = true }
 
 [dev-dependencies]
 physics-framework = { path = "../../../testing/physics-framework" }
 approx = { workspace = true }
+
+[lints]
+workspace = true
 
 # FMI-specific metadata
 [package.metadata.fmi]

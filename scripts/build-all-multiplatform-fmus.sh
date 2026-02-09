@@ -17,15 +17,15 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$REPO_ROOT"
 
-# Find all model directories (containing Cargo.toml with fmu_from_struct dependency)
+# Find all model directories (containing Cargo.toml with fmi-export dependency)
 MODEL_DIRS=()
 
 echo "Discovering models..."
 for toml in models/*/*/Cargo.toml; do
     if [ -f "$toml" ]; then
         dir=$(dirname "$toml")
-        # Check if it has fmu_from_struct dependency
-        if grep -q "fmu_from_struct" "$toml"; then
+        # Check if it has fmi-export dependency (FMU model)
+        if grep -q "fmi-export" "$toml"; then
             MODEL_DIRS+=("$dir")
             echo "  Found: $dir"
         fi

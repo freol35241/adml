@@ -47,7 +47,7 @@ class TestVanDerPolFMUStructure:
         metadata = validate_fmu_structure(fmu_path)
 
         assert metadata['fmi_version'] == '3.0'
-        assert metadata['model_name'] == 'VanDerPol'
+        assert metadata['model_name'] == 'adml-van-der-pol'
         assert metadata['cosimulation_supported'] == True
 
     def test_fmu_variables(self, fmu_path):

@@ -50,7 +50,7 @@ jobs:
           docker --version
           docker info
 
-      - name: Install cross
+      - name: Install cross and cargo-fmi
         run: |
           if ! command -v cross &> /dev/null; then
             echo "Installing cross..."
@@ -59,6 +59,7 @@ jobs:
             echo "cross is already installed"
             cross --version
           fi
+          cargo install cargo-fmi
 
       - name: Install zip utility
         run: |
@@ -328,7 +329,7 @@ jobs:
           ### Build Stack
 
           - **Language**: Rust (stable)
-          - **FMI Library**: fmu_from_struct
+          - **FMI Library**: fmi-export (rust-fmi)
           - **Cross-compilation**: cross (cross-rs)
           - **CI/CD**: GitHub Actions
 

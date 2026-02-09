@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+    "crates/*",
     "models/mathematical/*",
     "models/mechanical/*",
     "models/thermal/*",
@@ -18,10 +19,18 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/freol35241/adml"
 
+# Allow coverage_nightly cfg from upstream fmi-export macros
+[workspace.lints.rust.unexpected_cfgs]
+level = "allow"
+check-cfg = ['cfg(coverage_nightly)']
+
 [workspace.dependencies]
-# FMI export dependencies - using fmu_from_struct temporarily
-# Will migrate to fmi-export once it's published to crates.io
-fmu_from_struct = "0.2"
+# FMI export dependencies - migrated to fmi-export from rust-fmi
+fmi-export = "0.1"
+fmi = { version = "0.6", default-features = false, features = ["fmi3"] }
+
+# ADML shared crates
+adml-solver = { path = "crates/adml-solver" }
 
 # Testing dependencies
 approx = "0.5"

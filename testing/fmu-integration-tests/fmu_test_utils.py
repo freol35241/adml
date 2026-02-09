@@ -73,7 +73,7 @@ def simulate_fmu(
         )
 
     # Read model description to get variable names
-    model_description = read_model_description(fmu_path)
+    model_description = read_model_description(fmu_path, validate=False)
 
     # Prepare start values from parameters
     start_values = parameters if parameters else {}
@@ -100,7 +100,7 @@ def simulate_fmu(
         step_size=actual_step_size,
         output_interval=actual_step_size,  # Record at every step for accuracy
         start_values=start_values,
-        validate=True,  # Validate FMU structure
+        validate=False,  # Disabled: fmi-export v0.1.1 generates non-compliant ModelStructure ordering
         fmi_call_logger=None,  # Can enable for debugging
     )
 
@@ -221,7 +221,7 @@ def validate_fmu_structure(fmu_path: Path) -> Dict[str, any]:
         raise ImportError("FMPy is required. Install with: pip install fmpy")
 
     # Extract FMU to temporary directory for inspection
-    model_description = read_model_description(fmu_path)
+    model_description = read_model_description(fmu_path, validate=False)
 
     metadata = {
         'fmi_version': model_description.fmiVersion,

@@ -10,94 +10,127 @@
 //! - Reverse velocity with coefficient of restitution: v = -e * v
 //! - Stop bouncing when |v| < v_min
 
-// Allow clippy lints for generated code from fmu_from_struct derive macro
-#![allow(clippy::not_unsafe_ptr_arg_deref)]
-#![allow(clippy::ptr_offset_with_cast)]
-
-pub use fmu_from_struct::prelude::*;
+use fmi::fmi3::{Fmi3Error, Fmi3Res};
+use fmi_export::fmi3::{
+    CSDoStepResult, Context, DefaultLoggingCategory, ModelGetSetStates, UserModel,
+};
+use fmi_export::FmuModel;
 
 /// Bouncing Ball FMU model
 ///
 /// Simulates a ball bouncing under gravity with energy dissipation on impact.
 /// The ball stops bouncing when the velocity becomes too small.
-#[derive(Fmu, Default, Debug, Clone)]
-#[fmu_from_struct(fmi_version = 3)]
+#[derive(FmuModel, Default, Debug)]
+#[model(co_simulation = true, user_model = false)]
 pub struct BouncingBall {
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "-9.81")]
     /// Gravitational acceleration (m/s²), typically negative
+    #[variable(causality = Parameter, start = -9.81, initial = Exact)]
     pub g: f64,
 
-    #[fmu_from_struct(parameter)]
-    #[fmu_from_struct(start_value = "0.7")]
     /// Coefficient of restitution (0 < e < 1)
+    #[variable(causality = Parameter, start = 0.7, initial = Exact)]
     pub e: f64,
 
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "1.0")]
     /// Height above ground (m)
+    #[variable(causality = Output, start = 1.0, initial = Exact)]
     pub h: f64,
 
-    #[fmu_from_struct(output)]
-    #[fmu_from_struct(start_value = "0.0")]
     /// Vertical velocity (m/s)
+    #[variable(causality = Output, start = 0.0, initial = Exact)]
     pub v: f64,
 
+    /// Derivative of h
+    #[variable(causality = Local, derivative = h, initial = Calculated)]
+    der_h: f64,
+
+    /// Derivative of v
+    #[variable(causality = Local, derivative = v, initial = Calculated)]
+    der_v: f64,
+
     /// Minimum velocity threshold below which the ball stops
+    #[variable(skip)]
     v_min: f64,
 
     /// Whether the ball has stopped bouncing (at rest on ground)
+    #[variable(skip)]
     stopped: bool,
-
-    /// FMU runtime information (optional)
-    pub fmu_info: FmuInfo,
 }
 
-impl FmuFunctions for BouncingBall {
-    fn exit_initialization_mode(&mut self) {
+impl UserModel for BouncingBall {
+    type LoggingCategory = DefaultLoggingCategory;
+
+    fn configurate(&mut self, _context: &dyn Context<Self>) -> Result<(), Fmi3Error> {
         // Set the minimum velocity threshold
         self.v_min = 0.1;
+        Ok(())
     }
 
-    fn do_step(&mut self, _current_time: f64, time_step: f64) {
-        // If ball has stopped, no dynamics
-        if self.stopped {
-            return;
-        }
+    fn calculate_values(&mut self, _context: &dyn Context<Self>) -> Result<Fmi3Res, Fmi3Error> {
+        self.der_h = self.v;
+        self.der_v = self.g;
+        Ok(Fmi3Res::OK)
+    }
 
-        // Check for collision at start of step (before integration)
-        if self.h <= 0.0 && self.v < 0.0 {
-            // Ball has hit the ground
-            self.h = f64::MIN_POSITIVE; // Place slightly above ground
-            self.v = -self.v * self.e; // Reverse velocity with energy loss
+    fn do_step(
+        &mut self,
+        context: &mut dyn Context<Self>,
+        current_communication_point: f64,
+        communication_step_size: f64,
+        _no_set_fmu_state_prior_to_current_point: bool,
+    ) -> Result<CSDoStepResult, Fmi3Error> {
+        const FIXED_STEP: f64 = 0.001;
 
-            // Stop bouncing if velocity becomes too small
-            if self.v < self.v_min {
-                self.v = 0.0;
-                self.h = 0.0;
-                self.stopped = true; // Ball is now at rest
+        let t_end = current_communication_point + communication_step_size;
+        let mut t = current_communication_point;
+
+        let mut x = vec![0.0; Self::NUM_STATES];
+        let mut dx = vec![0.0; Self::NUM_STATES];
+
+        while t_end - t > f64::EPSILON * t_end.abs().max(1.0) {
+            if self.stopped {
+                break;
             }
 
-            // Don't integrate in the same step as a bounce (bounce is instantaneous)
-            return;
+            let dt = (t_end - t).min(FIXED_STEP);
+
+            // Handle collision event before integration
+            if self.h <= 0.0 && self.v < 0.0 {
+                self.h = f64::MIN_POSITIVE;
+                self.v = -self.v * self.e;
+
+                if self.v < self.v_min {
+                    self.v = 0.0;
+                    self.h = 0.0;
+                    self.stopped = true;
+                    break;
+                }
+            }
+
+            // Forward Euler micro-step
+            self.calculate_values(context)?;
+            self.get_continuous_states(&mut x)?;
+            self.get_continuous_state_derivatives(&mut dx)?;
+
+            for i in 0..Self::NUM_STATES {
+                x[i] += dx[i] * dt;
+            }
+
+            self.set_continuous_states(&x)?;
+            t += dt;
+            context.set_time(t);
+
+            // Snap to ground if ball crossed during step
+            if self.h < 0.0 {
+                self.h = 0.0;
+            }
         }
 
-        // Calculate derivatives:
-        // der(h) = v
-        // der(v) = g
-        let der_h = self.v;
-        let der_v = self.g;
-
-        // Euler integration
-        self.h += der_h * time_step;
-        self.v += der_v * time_step;
-
-        // Check for collision after integration (ball crossed ground during step)
-        if self.h < 0.0 {
-            self.h = 0.0; // Snap to ground level
-        }
+        context.set_time(t_end);
+        Ok(CSDoStepResult::completed(t_end))
     }
 }
+
+fmi_export::export_fmu!(BouncingBall);
 
 impl BouncingBall {
     /// Create a new bouncing ball with default parameters
@@ -107,9 +140,10 @@ impl BouncingBall {
             e: 0.7,
             h: 1.0,
             v: 0.0,
+            der_h: 0.0,
+            der_v: -9.81,
             v_min: 0.1,
             stopped: false,
-            fmu_info: FmuInfo::default(),
         }
     }
 
@@ -131,6 +165,40 @@ impl BouncingBall {
     /// Calculate total mechanical energy
     pub fn total_energy(&self) -> f64 {
         self.kinetic_energy() + self.potential_energy()
+    }
+
+    /// Perform a single Euler integration step (for testing without FMI context)
+    pub fn do_step(&mut self, _current_time: f64, time_step: f64) {
+        // If ball has stopped, no dynamics
+        if self.stopped {
+            return;
+        }
+
+        // Check for collision at start of step (before integration)
+        if self.h <= 0.0 && self.v < 0.0 {
+            self.h = f64::MIN_POSITIVE;
+            self.v = -self.v * self.e;
+
+            if self.v < self.v_min {
+                self.v = 0.0;
+                self.h = 0.0;
+                self.stopped = true;
+            }
+
+            return;
+        }
+
+        // Calculate derivatives
+        let der_h = self.v;
+        let der_v = self.g;
+
+        // Euler integration
+        self.h += der_h * time_step;
+        self.v += der_v * time_step;
+
+        if self.h < 0.0 {
+            self.h = 0.0;
+        }
     }
 }
 
