@@ -27,7 +27,7 @@ check-cfg = ['cfg(coverage_nightly)']
 [workspace.dependencies]
 # FMI export dependencies - migrated to fmi-export from rust-fmi
 fmi-export = "0.1"
-fmi = "0.6"
+fmi = { version = "0.6", default-features = false, features = ["fmi3"] }
 
 # ADML shared crates
 adml-solver = { path = "crates/adml-solver" }

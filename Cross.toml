@@ -16,6 +16,8 @@ image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:latest"
 # Use edge tag - the :latest tag has outdated MinGW-w64 missing GetHostNameW in ws2_32
 # See: https://sourceforge.net/p/mingw-w64/bugs/899/
 image = "ghcr.io/cross-rs/x86_64-pc-windows-gnu:edge"
+# Install libclang-dev for bindgen (required by fmi-sys)
+pre-build = ["apt-get update && apt-get install -y libclang-dev"]
 
 [target.aarch64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:latest"

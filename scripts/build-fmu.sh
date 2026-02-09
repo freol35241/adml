@@ -24,75 +24,34 @@ fi
 # Get the package name from Cargo.toml
 PACKAGE_NAME=$(grep "^name" "$MODEL_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)".*/\1/')
 
-# Convert hyphens to underscores for directory name
-# (package_fmu_after_build expects directory name to match library name)
-DIR_NAME="${PACKAGE_NAME//-/_}"
-
 echo "=========================================="
 echo "Building FMU for: $PACKAGE_NAME"
-echo "Directory name: $DIR_NAME"
 echo "=========================================="
 
-# Step 1: Build the model (release mode)
-echo "Building model..."
-# Remove old modelDescription.xml to ensure a fresh one is generated
-rm -f modelDescription.xml
-# Force rebuild to ensure modelDescription.xml is regenerated
-cargo clean -p "$PACKAGE_NAME" --release
-cargo build -p "$PACKAGE_NAME" --release
+# Build and package the FMU using cargo-fmi
+echo "Building and packaging FMU..."
+cargo fmi --package "$PACKAGE_NAME" bundle --release
 
-# Step 2: Create a temporary directory with underscore name
-TEMP_DIR=$(mktemp -d)
-WORK_DIR="$TEMP_DIR/$DIR_NAME"
-mkdir -p "$WORK_DIR"
-
-echo "Using temp directory: $WORK_DIR"
-
-# Step 3: Copy modelDescription.xml
-# fmu_from_struct generates it in the workspace root
-if [ -f "modelDescription.xml" ]; then
-    # Copy from workspace root (most recent build)
-    cp "modelDescription.xml" "$WORK_DIR/"
-elif [ -f "$MODEL_DIR/modelDescription.xml" ]; then
-    # Fallback: copy from model directory if it exists there
-    cp "$MODEL_DIR/modelDescription.xml" "$WORK_DIR/"
-else
-    echo "Error: modelDescription.xml not found"
-    echo "Expected in workspace root or $MODEL_DIR"
-    rm -rf "$TEMP_DIR"
-    exit 1
-fi
-
-# Step 4: Create target symlink
-ln -s "$(pwd)/target" "$WORK_DIR/target"
-
-# Step 5: Package the FMU
-echo "Packaging FMU..."
-cd "$WORK_DIR"
-package_fmu_after_build --release
-cd - > /dev/null
-
-# Step 6: Move FMU to output directory
+# Move FMU to output directory
 FMU_OUTPUT_DIR="fmus"
 mkdir -p "$FMU_OUTPUT_DIR"
 
-# Find the FMU file
-FMU_FILE=$(ls "$WORK_DIR"/*.fmu 2>/dev/null | head -1)
+# Find the built FMU in target/fmu/
+FMU_FILE=$(find target/fmu -name "*.fmu" -newer "$MODEL_DIR/Cargo.toml" 2>/dev/null | head -1)
+
+if [ -z "$FMU_FILE" ]; then
+    # Fallback: find any FMU
+    FMU_FILE=$(ls target/fmu/*.fmu 2>/dev/null | head -1)
+fi
 
 if [ -n "$FMU_FILE" ]; then
     FMU_NAME=$(basename "$FMU_FILE")
     cp "$FMU_FILE" "$FMU_OUTPUT_DIR/"
     echo "=========================================="
-    echo "✅ FMU created: $FMU_OUTPUT_DIR/$FMU_NAME"
+    echo "FMU created: $FMU_OUTPUT_DIR/$FMU_NAME"
     echo "=========================================="
-
-    # Cleanup
-    rm -rf "$TEMP_DIR"
-
-    # Return success
     exit 0
 else
-    echo "Error: No FMU file found"
-    rm -rf "$TEMP_DIR"
+    echo "Error: No FMU file found in target/fmu/"
     exit 1
 fi

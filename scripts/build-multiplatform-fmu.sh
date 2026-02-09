@@ -25,105 +25,75 @@ fi
 # Get the package name from Cargo.toml
 PACKAGE_NAME=$(grep "^name" "$MODEL_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)".*/\1/')
 
+echo "=========================================="
+echo "Building Multi-Platform FMU for: $PACKAGE_NAME"
+echo "=========================================="
+
+# Step 1: Build FMU for Linux x86_64 using cargo-fmi
+echo "Step 1: Building for Linux x86_64..."
+cargo fmi --package "$PACKAGE_NAME" bundle --release --target x86_64-unknown-linux-gnu
+
+# Step 2: Build for Windows x86_64 using cargo-fmi with cross
+echo "Step 2: Building for Windows x86_64 using cross..."
+# cargo-fmi doesn't directly support cross, so we cross-compile the library
+# and then merge it into the FMU
+cross build -p "$PACKAGE_NAME" --release --target x86_64-pc-windows-gnu
+
+# Step 3: Find the Linux FMU and merge in the Windows binary
+echo "Step 3: Creating multi-platform FMU..."
+
 # Convert hyphens to underscores for library name
 LIB_NAME="${PACKAGE_NAME//-/_}"
 
-echo "=========================================="
-echo "Building Multi-Platform FMU for: $PACKAGE_NAME"
-echo "Library name: $LIB_NAME"
-echo "=========================================="
+# Find the Linux FMU
+LINUX_FMU=$(find target/fmu -name "*.fmu" 2>/dev/null | head -1)
 
-# Step 1: Build for Linux x86_64
-echo "Step 1: Building for Linux x86_64..."
-rm -f modelDescription.xml
-cargo clean -p "$PACKAGE_NAME" --release
-cargo build -p "$PACKAGE_NAME" --release --target x86_64-unknown-linux-gnu
-
-# Save the modelDescription.xml
-if [ ! -f "modelDescription.xml" ]; then
-    echo "Error: modelDescription.xml not found after Linux build"
-    exit 1
-fi
-cp modelDescription.xml modelDescription.xml.tmp
-
-# Step 2: Build for Windows x86_64 using cross
-echo "Step 2: Building for Windows x86_64 using cross..."
-cross build -p "$PACKAGE_NAME" --release --target x86_64-pc-windows-gnu
-
-# Step 3: Read model information from modelDescription.xml
-MODEL_NAME=$(grep -oP 'modelName="\K[^"]+' modelDescription.xml.tmp)
-FMI_VERSION=$(grep -oP 'fmiVersion="\K[^"]+' modelDescription.xml.tmp)
-
-echo "Model name: $MODEL_NAME"
-echo "FMI version: $FMI_VERSION"
-
-# Determine binary folder paths based on FMI version
-if [[ "$FMI_VERSION" == "3.0" ]]; then
-    LINUX_BIN_DIR="binaries/x86_64-linux"
-    WINDOWS_BIN_DIR="binaries/x86_64-windows"
-elif [[ "$FMI_VERSION" == "2.0" ]]; then
-    LINUX_BIN_DIR="binaries/linux64"
-    WINDOWS_BIN_DIR="binaries/win64"
-else
-    echo "Error: Unsupported FMI version: $FMI_VERSION"
+if [ -z "$LINUX_FMU" ]; then
+    echo "Error: No Linux FMU found in target/fmu/"
     exit 1
 fi
 
-# Step 4: Create FMU directory structure
-echo "Step 3: Creating multi-platform FMU..."
+FMU_NAME=$(basename "$LINUX_FMU")
 FMU_TEMP_DIR=$(mktemp -d)
-FMU_NAME="${MODEL_NAME}.fmu"
 
-# Create directory structure
-mkdir -p "$FMU_TEMP_DIR/$LINUX_BIN_DIR"
-mkdir -p "$FMU_TEMP_DIR/$WINDOWS_BIN_DIR"
-mkdir -p "$FMU_TEMP_DIR/resources"
+# Extract Linux FMU
+cd "$FMU_TEMP_DIR"
+unzip -q "$OLDPWD/$LINUX_FMU"
 
-# Copy modelDescription.xml
-cp modelDescription.xml.tmp "$FMU_TEMP_DIR/modelDescription.xml"
-
-# Copy Linux binary
-LINUX_SO="target/x86_64-unknown-linux-gnu/release/lib${LIB_NAME}.so"
-if [ ! -f "$LINUX_SO" ]; then
-    echo "Error: Linux binary not found at $LINUX_SO"
-    rm -rf "$FMU_TEMP_DIR"
-    rm -f modelDescription.xml.tmp
-    exit 1
-fi
-cp "$LINUX_SO" "$FMU_TEMP_DIR/$LINUX_BIN_DIR/${MODEL_NAME}.so"
-echo "  ✓ Added Linux binary: $LINUX_BIN_DIR/${MODEL_NAME}.so"
-
-# Copy Windows binary
-WINDOWS_DLL="target/x86_64-pc-windows-gnu/release/${LIB_NAME}.dll"
+# Add Windows binary
+WINDOWS_DLL="$OLDPWD/target/x86_64-pc-windows-gnu/release/${LIB_NAME}.dll"
 if [ ! -f "$WINDOWS_DLL" ]; then
     echo "Error: Windows binary not found at $WINDOWS_DLL"
+    cd "$OLDPWD"
     rm -rf "$FMU_TEMP_DIR"
-    rm -f modelDescription.xml.tmp
     exit 1
 fi
-cp "$WINDOWS_DLL" "$FMU_TEMP_DIR/$WINDOWS_BIN_DIR/${MODEL_NAME}.dll"
-echo "  ✓ Added Windows binary: $WINDOWS_BIN_DIR/${MODEL_NAME}.dll"
 
-# Step 5: Create the FMU (zip file)
+# Determine model name from FMU filename (strip .fmu extension)
+MODEL_NAME="${FMU_NAME%.fmu}"
+WINDOWS_BIN_DIR="binaries/x86_64-windows"
+mkdir -p "$WINDOWS_BIN_DIR"
+cp "$WINDOWS_DLL" "$WINDOWS_BIN_DIR/${MODEL_NAME}.dll"
+echo "  Added Windows binary: $WINDOWS_BIN_DIR/${MODEL_NAME}.dll"
+
+# Repack the FMU
+zip -r -q "${FMU_NAME}" .
+cd "$OLDPWD"
+
+# Move to output directory
 FMU_OUTPUT_DIR="fmus"
 mkdir -p "$FMU_OUTPUT_DIR"
-
-cd "$FMU_TEMP_DIR"
-zip -r -q "../${FMU_NAME}" .
-cd - > /dev/null
-
-mv "$FMU_TEMP_DIR/../${FMU_NAME}" "$FMU_OUTPUT_DIR/"
+cp "$FMU_TEMP_DIR/${FMU_NAME}" "$FMU_OUTPUT_DIR/"
 
 # Cleanup
 rm -rf "$FMU_TEMP_DIR"
-rm -f modelDescription.xml.tmp
 
 echo "=========================================="
-echo "✅ Multi-platform FMU created: $FMU_OUTPUT_DIR/$FMU_NAME"
+echo "Multi-platform FMU created: $FMU_OUTPUT_DIR/$FMU_NAME"
 echo ""
 echo "Platforms included:"
-echo "  • Linux x86_64"
-echo "  • Windows x86_64"
+echo "  Linux x86_64"
+echo "  Windows x86_64"
 echo "=========================================="
 
 exit 0

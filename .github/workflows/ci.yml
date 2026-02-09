@@ -256,7 +256,7 @@ jobs:
 
       - name: Install FMU packaging tool
         run: |
-          cargo install package_fmu_after_build
+          cargo install cargo-fmi
 
       - name: Cache cargo
         uses: actions/cache@v4
