@@ -1,2 +1,2 @@
-createSrcSidebar('[["adml_bouncing_ball",["",[],["lib.rs"]]],["adml_dahlquist",["",[],["lib.rs"]]],["adml_lorenz",["",[],["lib.rs"]]],["adml_rc_thermal_single_zone",["",[],["lib.rs"]]],["adml_simple_pendulum",["",[],["lib.rs"]]],["adml_van_der_pol",["",[],["lib.rs"]]],["physics_framework",["",[],["lib.rs"]]]]');
-//{"start":19,"fragment_lengths":[41,38,35,51,44,40,41]}
+createSrcSidebar('[["adml_bouncing_ball",["",[],["lib.rs"]]],["adml_dahlquist",["",[],["lib.rs"]]],["adml_lorenz",["",[],["lib.rs"]]],["adml_rc_thermal_single_zone",["",[],["lib.rs"]]],["adml_simple_pendulum",["",[],["lib.rs"]]],["adml_solver",["",[],["lib.rs"]]],["adml_van_der_pol",["",[],["lib.rs"]]],["physics_framework",["",[],["lib.rs"]]]]');
+//{"start":19,"fragment_lengths":[41,38,35,51,44,35,40,41]}

@@ -1,2 +1,2 @@
-window.ALL_CRATES = ["adml_bouncing_ball","adml_dahlquist","adml_lorenz","adml_rc_thermal_single_zone","adml_simple_pendulum","adml_van_der_pol","physics_framework"];
-//{"start":21,"fragment_lengths":[20,17,14,30,23,19,20]}
+window.ALL_CRATES = ["adml_bouncing_ball","adml_dahlquist","adml_lorenz","adml_rc_thermal_single_zone","adml_simple_pendulum","adml_solver","adml_van_der_pol","physics_framework"];
+//{"start":21,"fragment_lengths":[20,17,14,30,23,14,19,20]}
