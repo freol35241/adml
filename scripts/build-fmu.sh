@@ -55,15 +55,18 @@ fi
 
 # Copy to output dir, renaming to model_name if available
 if [ -n "$MODEL_NAME" ]; then
-    cp "$FMU_FILE" "$FMU_OUTPUT_DIR/${MODEL_NAME}.fmu"
-    echo "=========================================="
-    echo "FMU created: $FMU_OUTPUT_DIR/${MODEL_NAME}.fmu"
-    echo "=========================================="
+    OUTPUT_FMU="$FMU_OUTPUT_DIR/${MODEL_NAME}.fmu"
 else
-    cp "$FMU_FILE" "$FMU_OUTPUT_DIR/"
-    echo "=========================================="
-    echo "FMU created: $FMU_OUTPUT_DIR/${CRATE_FMU_NAME}.fmu"
-    echo "=========================================="
+    OUTPUT_FMU="$FMU_OUTPUT_DIR/${CRATE_FMU_NAME}.fmu"
 fi
+cp "$FMU_FILE" "$OUTPUT_FMU"
+
+# Fix ModelStructure element ordering (workaround for fmi-export v0.1.1 bug)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+python3 "$SCRIPT_DIR/fix_model_structure.py" "$OUTPUT_FMU"
+
+echo "=========================================="
+echo "FMU created: $OUTPUT_FMU"
+echo "=========================================="
 
 exit 0
