@@ -11,10 +11,12 @@
 //! - Stop bouncing when |v| < v_min
 
 use fmi::fmi3::{Fmi3Error, Fmi3Res};
-use fmi_export::fmi3::{
-    CSDoStepResult, Context, DefaultLoggingCategory, ModelGetSetStates, UserModel,
-};
+use fmi::EventFlags;
+use fmi_export::fmi3::{Context, DefaultLoggingCategory, UserModel};
 use fmi_export::FmuModel;
+
+/// Hysteresis epsilon for event indicator near zero (matches Reference-FMUs)
+const EVENT_EPSILON: f64 = 1e-10;
 
 /// Bouncing Ball FMU model
 ///
@@ -54,6 +56,12 @@ pub struct BouncingBall {
     /// Whether the ball has stopped bouncing (at rest on ground)
     #[variable(skip)]
     stopped: bool,
+
+    /// Event indicator for ground collision (positive above ground, negative below).
+    /// This field is used by the FmuModel derive macro to set MAX_EVENT_INDICATORS = 1.
+    #[variable(event_indicator = true, skip)]
+    #[allow(dead_code)]
+    event_indicator_h: f64,
 }
 
 impl UserModel for BouncingBall {
@@ -66,68 +74,55 @@ impl UserModel for BouncingBall {
     }
 
     fn calculate_values(&mut self, _context: &dyn Context<Self>) -> Result<Fmi3Res, Fmi3Error> {
-        self.der_h = self.v;
-        self.der_v = self.g;
+        if self.stopped {
+            self.der_h = 0.0;
+            self.der_v = 0.0;
+        } else {
+            self.der_h = self.v;
+            self.der_v = self.g;
+        }
         Ok(Fmi3Res::OK)
     }
 
-    fn do_step(
+    fn get_event_indicators(
         &mut self,
-        context: &mut dyn Context<Self>,
-        current_communication_point: f64,
-        communication_step_size: f64,
-        _no_set_fmu_state_prior_to_current_point: bool,
-    ) -> Result<CSDoStepResult, Fmi3Error> {
-        const FIXED_STEP: f64 = 0.001;
+        _context: &dyn Context<Self>,
+        indicators: &mut [f64],
+    ) -> Result<bool, Fmi3Error> {
+        // Hysteresis: when h is near zero and ball is moving up,
+        // keep indicator negative to prevent retriggering
+        if self.h > -EVENT_EPSILON && self.h <= 0.0 && self.v > 0.0 {
+            indicators[0] = -EVENT_EPSILON;
+        } else {
+            indicators[0] = self.h;
+        }
+        Ok(true)
+    }
 
-        let t_end = current_communication_point + communication_step_size;
-        let mut t = current_communication_point;
+    fn event_update(
+        &mut self,
+        _context: &dyn Context<Self>,
+        event_flags: &mut EventFlags,
+    ) -> Result<Fmi3Res, Fmi3Error> {
+        event_flags.reset();
 
-        let mut x = vec![0.0; Self::NUM_STATES];
-        let mut dx = vec![0.0; Self::NUM_STATES];
+        if self.h <= 0.0 && self.v < 0.0 {
+            self.h = f64::MIN_POSITIVE;
+            self.v = -self.v * self.e;
 
-        while t_end - t > f64::EPSILON * t_end.abs().max(1.0) {
-            if self.stopped {
-                break;
-            }
-
-            let dt = (t_end - t).min(FIXED_STEP);
-
-            // Handle collision event before integration
-            if self.h <= 0.0 && self.v < 0.0 {
-                self.h = f64::MIN_POSITIVE;
-                self.v = -self.v * self.e;
-
-                if self.v < self.v_min {
-                    self.v = 0.0;
-                    self.h = 0.0;
-                    self.stopped = true;
-                    break;
-                }
-            }
-
-            // Forward Euler micro-step
-            self.calculate_values(context)?;
-            self.get_continuous_states(&mut x)?;
-            self.get_continuous_state_derivatives(&mut dx)?;
-
-            for i in 0..Self::NUM_STATES {
-                x[i] += dx[i] * dt;
-            }
-
-            self.set_continuous_states(&x)?;
-            t += dt;
-            context.set_time(t);
-
-            // Snap to ground if ball crossed during step
-            if self.h < 0.0 {
+            if self.v < self.v_min {
+                self.v = 0.0;
                 self.h = 0.0;
+                self.stopped = true;
             }
+
+            event_flags.values_of_continuous_states_changed = true;
         }
 
-        context.set_time(t_end);
-        Ok(CSDoStepResult::completed(t_end))
+        Ok(Fmi3Res::OK)
     }
+
+    adml_solver::euler_cs_step_with_events!(0.001);
 }
 
 fmi_export::export_fmu!(BouncingBall);
@@ -144,6 +139,7 @@ impl BouncingBall {
             der_v: -9.81,
             v_min: 0.1,
             stopped: false,
+            event_indicator_h: 0.0,
         }
     }
 
@@ -167,14 +163,17 @@ impl BouncingBall {
         self.kinetic_energy() + self.potential_energy()
     }
 
-    /// Perform a single Euler integration step (for testing without FMI context)
-    pub fn do_step(&mut self, _current_time: f64, time_step: f64) {
-        // If ball has stopped, no dynamics
-        if self.stopped {
-            return;
+    /// Compute the event indicator value (positive above ground)
+    fn event_indicator(&self) -> f64 {
+        if self.h > -EVENT_EPSILON && self.h <= 0.0 && self.v > 0.0 {
+            -EVENT_EPSILON
+        } else {
+            self.h
         }
+    }
 
-        // Check for collision at start of step (before integration)
+    /// Handle a collision event (reverses velocity with restitution)
+    fn handle_collision(&mut self) {
         if self.h <= 0.0 && self.v < 0.0 {
             self.h = f64::MIN_POSITIVE;
             self.v = -self.v * self.e;
@@ -184,20 +183,27 @@ impl BouncingBall {
                 self.h = 0.0;
                 self.stopped = true;
             }
+        }
+    }
 
+    /// Perform a single Euler integration step (for testing without FMI context)
+    pub fn do_step(&mut self, _current_time: f64, time_step: f64) {
+        if self.stopped {
             return;
         }
 
-        // Calculate derivatives
+        let prev_z = self.event_indicator();
+
+        // Calculate derivatives and integrate
         let der_h = self.v;
         let der_v = self.g;
-
-        // Euler integration
         self.h += der_h * time_step;
         self.v += der_v * time_step;
 
-        if self.h < 0.0 {
-            self.h = 0.0;
+        // Check for zero-crossing event
+        let z = self.event_indicator();
+        if prev_z * z < 0.0 {
+            self.handle_collision();
         }
     }
 }
@@ -252,51 +258,48 @@ mod tests {
     #[test]
     fn test_collision_handling() {
         let mut model = BouncingBall::new();
-        model.h = 0.0;
+        // Start above ground with downward velocity — ball will cross ground during step
+        model.h = 0.01;
         model.v = -2.0;
-        let initial_v_abs = model.v.abs();
 
         model.do_step(0.0, 0.01);
 
-        // After collision, velocity should be reversed and reduced
-        let expected_v = initial_v_abs * model.e;
-        assert!((model.v - expected_v).abs() < 1e-10);
-        assert!(model.h > 0.0); // Should be slightly above ground
+        // After collision, velocity should be positive (bounced) and reduced by e
+        assert!(model.v > 0.0);
+        assert!(model.h > 0.0);
     }
 
     #[test]
     fn test_stopping_condition() {
         let mut model = BouncingBall::new();
         let original_g = model.g;
-        model.h = 0.0;
-        model.v = -0.05; // Below v_min = 0.1
+        // Start just above ground with small downward velocity.
+        // After integration: h crosses zero and v is small enough that
+        // the bounced velocity (|v| * e) < v_min.
+        model.h = 0.0002;
+        model.v = -0.03;
 
         model.do_step(0.0, 0.01);
 
-        // Ball should have stopped
+        // Ball should have stopped after the zero-crossing event
         assert_eq!(model.v, 0.0);
         assert_eq!(model.h, 0.0);
-        assert!(model.is_stopped()); // Ball is at rest
-        assert_eq!(model.g, original_g); // Gravity parameter unchanged
+        assert!(model.is_stopped());
+        assert_eq!(model.g, original_g);
     }
 
     #[test]
     fn test_energy_loss_on_bounce() {
         let mut model = BouncingBall::new();
-        model.h = 1.0;
-        model.v = 0.0;
-        let _initial_energy = model.total_energy();
-
-        // Simulate fall and bounce
-        model.h = 0.0;
-        model.v = -4.43; // Approximate velocity after falling from h=1.0
+        // Start just above ground with high downward velocity
+        model.h = 0.01;
+        model.v = -4.43;
 
         let energy_before_bounce = model.total_energy();
         model.do_step(0.0, 0.01);
         let energy_after_bounce = model.total_energy();
 
-        // Energy should decrease after bounce (but not necessarily from initial,
-        // since we artificially set the velocity)
+        // Energy should decrease after bounce
         assert!(energy_after_bounce < energy_before_bounce);
     }
 
@@ -313,5 +316,58 @@ mod tests {
         // v should become more negative due to gravity
         assert!(model.v < initial_v);
         assert!(model.h < 0.5);
+    }
+
+    #[test]
+    fn test_event_indicator_positive_above_ground() {
+        let model = BouncingBall::new();
+        // h = 1.0, ball is above ground — indicator should be positive
+        assert!(model.event_indicator() > 0.0);
+    }
+
+    #[test]
+    fn test_event_indicator_negative_below_ground() {
+        let mut model = BouncingBall::new();
+        model.h = -0.1;
+        model.v = -1.0;
+        // Ball is below ground — indicator should be negative
+        assert!(model.event_indicator() < 0.0);
+    }
+
+    #[test]
+    fn test_event_indicator_hysteresis() {
+        let mut model = BouncingBall::new();
+        // h near zero, ball moving up — hysteresis should keep indicator negative
+        model.h = 0.0;
+        model.v = 1.0;
+        assert!(model.event_indicator() < 0.0);
+        assert!((model.event_indicator() - (-EVENT_EPSILON)).abs() < 1e-20);
+    }
+
+    #[test]
+    fn test_handle_collision_reverses_velocity() {
+        let mut model = BouncingBall::new();
+        model.h = 0.0;
+        model.v = -2.0;
+
+        model.handle_collision();
+
+        let expected_v = 2.0 * model.e;
+        assert!((model.v - expected_v).abs() < 1e-10);
+        assert!(model.h > 0.0);
+        assert!(!model.is_stopped());
+    }
+
+    #[test]
+    fn test_handle_collision_stops_at_low_velocity() {
+        let mut model = BouncingBall::new();
+        model.h = 0.0;
+        model.v = -0.05; // Below v_min
+
+        model.handle_collision();
+
+        assert_eq!(model.v, 0.0);
+        assert_eq!(model.h, 0.0);
+        assert!(model.is_stopped());
     }
 }
