@@ -22,206 +22,339 @@
 <a href=#22 id=22 data-nosnippet>22</a>//! ```
 <a href=#23 id=23 data-nosnippet>23</a>
 <a href=#24 id=24 data-nosnippet>24</a></span><span class="kw">use </span>fmi::fmi3::Fmi3Error;
-<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fmi_export::fmi3::{CSDoStepResult, Context, ModelGetSetStates, UserModel};
-<a href=#26 id=26 data-nosnippet>26</a>
-<a href=#27 id=27 data-nosnippet>27</a><span class="doccomment">/// Perform forward Euler integration with micro-stepping.
-<a href=#28 id=28 data-nosnippet>28</a>///
-<a href=#29 id=29 data-nosnippet>29</a>/// Integrates the model's continuous states from `current_communication_point`
-<a href=#30 id=30 data-nosnippet>30</a>/// to `current_communication_point + communication_step_size` using fixed-step
-<a href=#31 id=31 data-nosnippet>31</a>/// forward Euler with step size `fixed_step`.
-<a href=#32 id=32 data-nosnippet>32</a>///
-<a href=#33 id=33 data-nosnippet>33</a>/// The model's `calculate_values()` is called at each micro-step to update
-<a href=#34 id=34 data-nosnippet>34</a>/// derivatives before integration. This is the same function used by ME mode,
-<a href=#35 id=35 data-nosnippet>35</a>/// so equations are defined only once.
-<a href=#36 id=36 data-nosnippet>36</a>///
-<a href=#37 id=37 data-nosnippet>37</a>/// For models with `NUM_STATES == 0`, this simply advances time.
-<a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">pub fn </span>euler_step&lt;M: UserModel + ModelGetSetStates&gt;(
-<a href=#39 id=39 data-nosnippet>39</a>    model: <span class="kw-2">&amp;mut </span>M,
-<a href=#40 id=40 data-nosnippet>40</a>    context: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Context&lt;M&gt;,
-<a href=#41 id=41 data-nosnippet>41</a>    current_communication_point: f64,
-<a href=#42 id=42 data-nosnippet>42</a>    communication_step_size: f64,
-<a href=#43 id=43 data-nosnippet>43</a>    fixed_step: f64,
-<a href=#44 id=44 data-nosnippet>44</a>) -&gt; <span class="prelude-ty">Result</span>&lt;CSDoStepResult, Fmi3Error&gt; {
-<a href=#45 id=45 data-nosnippet>45</a>    <span class="kw">let </span>t_end = current_communication_point + communication_step_size;
-<a href=#46 id=46 data-nosnippet>46</a>
-<a href=#47 id=47 data-nosnippet>47</a>    <span class="kw">if </span>M::NUM_STATES == <span class="number">0 </span>{
-<a href=#48 id=48 data-nosnippet>48</a>        context.set_time(t_end);
-<a href=#49 id=49 data-nosnippet>49</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(CSDoStepResult::completed(t_end));
-<a href=#50 id=50 data-nosnippet>50</a>    }
-<a href=#51 id=51 data-nosnippet>51</a>
-<a href=#52 id=52 data-nosnippet>52</a>    <span class="kw">let </span><span class="kw-2">mut </span>x = <span class="macro">vec!</span>[<span class="number">0.0</span>; M::NUM_STATES];
-<a href=#53 id=53 data-nosnippet>53</a>    <span class="kw">let </span><span class="kw-2">mut </span>dx = <span class="macro">vec!</span>[<span class="number">0.0</span>; M::NUM_STATES];
-<a href=#54 id=54 data-nosnippet>54</a>    <span class="kw">let </span><span class="kw-2">mut </span>t = current_communication_point;
-<a href=#55 id=55 data-nosnippet>55</a>
-<a href=#56 id=56 data-nosnippet>56</a>    <span class="kw">while </span>t_end - t &gt; f64::EPSILON * t_end.abs().max(<span class="number">1.0</span>) {
-<a href=#57 id=57 data-nosnippet>57</a>        <span class="kw">let </span>dt = (t_end - t).min(fixed_step);
-<a href=#58 id=58 data-nosnippet>58</a>
-<a href=#59 id=59 data-nosnippet>59</a>        <span class="comment">// Update derivatives at current state
-<a href=#60 id=60 data-nosnippet>60</a>        </span>model.calculate_values(context)<span class="question-mark">?</span>;
-<a href=#61 id=61 data-nosnippet>61</a>        model.get_continuous_states(<span class="kw-2">&amp;mut </span>x)<span class="question-mark">?</span>;
-<a href=#62 id=62 data-nosnippet>62</a>        model.get_continuous_state_derivatives(<span class="kw-2">&amp;mut </span>dx)<span class="question-mark">?</span>;
-<a href=#63 id=63 data-nosnippet>63</a>
-<a href=#64 id=64 data-nosnippet>64</a>        <span class="comment">// Forward Euler: x_{n+1} = x_n + dt * dx/dt
-<a href=#65 id=65 data-nosnippet>65</a>        </span><span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..M::NUM_STATES {
-<a href=#66 id=66 data-nosnippet>66</a>            x[i] += dx[i] * dt;
-<a href=#67 id=67 data-nosnippet>67</a>        }
-<a href=#68 id=68 data-nosnippet>68</a>
-<a href=#69 id=69 data-nosnippet>69</a>        model.set_continuous_states(<span class="kw-2">&amp;</span>x)<span class="question-mark">?</span>;
-<a href=#70 id=70 data-nosnippet>70</a>        t += dt;
-<a href=#71 id=71 data-nosnippet>71</a>        context.set_time(t);
-<a href=#72 id=72 data-nosnippet>72</a>    }
-<a href=#73 id=73 data-nosnippet>73</a>
-<a href=#74 id=74 data-nosnippet>74</a>    <span class="prelude-val">Ok</span>(CSDoStepResult::completed(t_end))
-<a href=#75 id=75 data-nosnippet>75</a>}
-<a href=#76 id=76 data-nosnippet>76</a>
-<a href=#77 id=77 data-nosnippet>77</a><span class="doccomment">/// Perform symplectic (semi-implicit) Euler integration with micro-stepping.
-<a href=#78 id=78 data-nosnippet>78</a>///
-<a href=#79 id=79 data-nosnippet>79</a>/// This solver assumes the state vector is organized as pairs of
-<a href=#80 id=80 data-nosnippet>80</a>/// (position, velocity) variables, where odd-indexed derivatives depend on
-<a href=#81 id=81 data-nosnippet>81</a>/// even-indexed states (positions) and even-indexed derivatives are simply
-<a href=#82 id=82 data-nosnippet>82</a>/// the velocities (odd-indexed states).
-<a href=#83 id=83 data-nosnippet>83</a>///
-<a href=#84 id=84 data-nosnippet>84</a>/// The integration order is:
-<a href=#85 id=85 data-nosnippet>85</a>/// 1. Compute derivatives at current state via `calculate_values()`
-<a href=#86 id=86 data-nosnippet>86</a>/// 2. Update velocities (odd-indexed states) using current derivatives
-<a href=#87 id=87 data-nosnippet>87</a>/// 3. Update positions (even-indexed states) using the **new** velocities
-<a href=#88 id=88 data-nosnippet>88</a>///
-<a href=#89 id=89 data-nosnippet>89</a>/// This preserves energy for conservative systems, unlike forward Euler.
-<a href=#90 id=90 data-nosnippet>90</a>///
-<a href=#91 id=91 data-nosnippet>91</a>/// # State ordering convention
-<a href=#92 id=92 data-nosnippet>92</a>///
-<a href=#93 id=93 data-nosnippet>93</a>/// States must be ordered as: `[pos_0, vel_0, pos_1, vel_1, ...]`
-<a href=#94 id=94 data-nosnippet>94</a>/// where `der(pos_i) = vel_i` and `der(vel_i) = f(pos_i, vel_i, ...)`.
-<a href=#95 id=95 data-nosnippet>95</a></span><span class="kw">pub fn </span>symplectic_euler_step&lt;M: UserModel + ModelGetSetStates&gt;(
-<a href=#96 id=96 data-nosnippet>96</a>    model: <span class="kw-2">&amp;mut </span>M,
-<a href=#97 id=97 data-nosnippet>97</a>    context: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Context&lt;M&gt;,
-<a href=#98 id=98 data-nosnippet>98</a>    current_communication_point: f64,
-<a href=#99 id=99 data-nosnippet>99</a>    communication_step_size: f64,
-<a href=#100 id=100 data-nosnippet>100</a>    fixed_step: f64,
-<a href=#101 id=101 data-nosnippet>101</a>) -&gt; <span class="prelude-ty">Result</span>&lt;CSDoStepResult, Fmi3Error&gt; {
-<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">let </span>t_end = current_communication_point + communication_step_size;
-<a href=#103 id=103 data-nosnippet>103</a>
-<a href=#104 id=104 data-nosnippet>104</a>    <span class="kw">if </span>M::NUM_STATES == <span class="number">0 </span>{
-<a href=#105 id=105 data-nosnippet>105</a>        context.set_time(t_end);
-<a href=#106 id=106 data-nosnippet>106</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(CSDoStepResult::completed(t_end));
-<a href=#107 id=107 data-nosnippet>107</a>    }
-<a href=#108 id=108 data-nosnippet>108</a>
-<a href=#109 id=109 data-nosnippet>109</a>    <span class="macro">assert!</span>(
-<a href=#110 id=110 data-nosnippet>110</a>        M::NUM_STATES % <span class="number">2 </span>== <span class="number">0</span>,
-<a href=#111 id=111 data-nosnippet>111</a>        <span class="string">"symplectic Euler requires an even number of states (position/velocity pairs)"
-<a href=#112 id=112 data-nosnippet>112</a>    </span>);
-<a href=#113 id=113 data-nosnippet>113</a>
-<a href=#114 id=114 data-nosnippet>114</a>    <span class="kw">let </span><span class="kw-2">mut </span>x = <span class="macro">vec!</span>[<span class="number">0.0</span>; M::NUM_STATES];
-<a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">let </span><span class="kw-2">mut </span>dx = <span class="macro">vec!</span>[<span class="number">0.0</span>; M::NUM_STATES];
-<a href=#116 id=116 data-nosnippet>116</a>    <span class="kw">let </span><span class="kw-2">mut </span>t = current_communication_point;
-<a href=#117 id=117 data-nosnippet>117</a>
-<a href=#118 id=118 data-nosnippet>118</a>    <span class="kw">while </span>t_end - t &gt; f64::EPSILON * t_end.abs().max(<span class="number">1.0</span>) {
-<a href=#119 id=119 data-nosnippet>119</a>        <span class="kw">let </span>dt = (t_end - t).min(fixed_step);
-<a href=#120 id=120 data-nosnippet>120</a>
-<a href=#121 id=121 data-nosnippet>121</a>        <span class="comment">// Update derivatives at current state
-<a href=#122 id=122 data-nosnippet>122</a>        </span>model.calculate_values(context)<span class="question-mark">?</span>;
-<a href=#123 id=123 data-nosnippet>123</a>        model.get_continuous_states(<span class="kw-2">&amp;mut </span>x)<span class="question-mark">?</span>;
-<a href=#124 id=124 data-nosnippet>124</a>        model.get_continuous_state_derivatives(<span class="kw-2">&amp;mut </span>dx)<span class="question-mark">?</span>;
-<a href=#125 id=125 data-nosnippet>125</a>
-<a href=#126 id=126 data-nosnippet>126</a>        <span class="comment">// Symplectic Euler: update velocities first, then positions
-<a href=#127 id=127 data-nosnippet>127</a>        </span><span class="kw">for </span>pair <span class="kw">in </span><span class="number">0</span>..(M::NUM_STATES / <span class="number">2</span>) {
-<a href=#128 id=128 data-nosnippet>128</a>            <span class="kw">let </span>pos_idx = pair * <span class="number">2</span>;
-<a href=#129 id=129 data-nosnippet>129</a>            <span class="kw">let </span>vel_idx = pair * <span class="number">2 </span>+ <span class="number">1</span>;
-<a href=#130 id=130 data-nosnippet>130</a>
-<a href=#131 id=131 data-nosnippet>131</a>            <span class="comment">// Step 1: Update velocity using current acceleration
-<a href=#132 id=132 data-nosnippet>132</a>            </span>x[vel_idx] += dx[vel_idx] * dt;
-<a href=#133 id=133 data-nosnippet>133</a>
-<a href=#134 id=134 data-nosnippet>134</a>            <span class="comment">// Step 2: Update position using NEW velocity
-<a href=#135 id=135 data-nosnippet>135</a>            </span>x[pos_idx] += x[vel_idx] * dt;
-<a href=#136 id=136 data-nosnippet>136</a>        }
-<a href=#137 id=137 data-nosnippet>137</a>
-<a href=#138 id=138 data-nosnippet>138</a>        model.set_continuous_states(<span class="kw-2">&amp;</span>x)<span class="question-mark">?</span>;
-<a href=#139 id=139 data-nosnippet>139</a>        t += dt;
-<a href=#140 id=140 data-nosnippet>140</a>        context.set_time(t);
-<a href=#141 id=141 data-nosnippet>141</a>    }
-<a href=#142 id=142 data-nosnippet>142</a>
-<a href=#143 id=143 data-nosnippet>143</a>    <span class="prelude-val">Ok</span>(CSDoStepResult::completed(t_end))
-<a href=#144 id=144 data-nosnippet>144</a>}
-<a href=#145 id=145 data-nosnippet>145</a>
-<a href=#146 id=146 data-nosnippet>146</a><span class="doccomment">/// Generates a `do_step` method that uses forward Euler integration
-<a href=#147 id=147 data-nosnippet>147</a>/// with micro-stepping at the given fixed step size.
-<a href=#148 id=148 data-nosnippet>148</a>///
-<a href=#149 id=149 data-nosnippet>149</a>/// Place this inside your `impl UserModel for MyModel` block.
-<a href=#150 id=150 data-nosnippet>150</a>/// The model must also implement `ModelGetSetStates` (auto-generated
-<a href=#151 id=151 data-nosnippet>151</a>/// by the `FmuModel` derive macro from `#[variable(derivative = x)]`).
-<a href=#152 id=152 data-nosnippet>152</a>///
-<a href=#153 id=153 data-nosnippet>153</a>/// # Example
-<a href=#154 id=154 data-nosnippet>154</a>///
-<a href=#155 id=155 data-nosnippet>155</a>/// ```ignore
-<a href=#156 id=156 data-nosnippet>156</a>/// impl UserModel for Dahlquist {
-<a href=#157 id=157 data-nosnippet>157</a>///     type LoggingCategory = DefaultLoggingCategory;
-<a href=#158 id=158 data-nosnippet>158</a>///     fn calculate_values(&amp;mut self, _ctx: &amp;dyn Context&lt;Self&gt;) -&gt; Result&lt;Fmi3Res, Fmi3Error&gt; {
-<a href=#159 id=159 data-nosnippet>159</a>///         self.der_x = -self.k * self.x;
-<a href=#160 id=160 data-nosnippet>160</a>///         Ok(Fmi3Res::OK)
-<a href=#161 id=161 data-nosnippet>161</a>///     }
-<a href=#162 id=162 data-nosnippet>162</a>///     adml_solver::euler_cs_step!(0.001);
-<a href=#163 id=163 data-nosnippet>163</a>/// }
-<a href=#164 id=164 data-nosnippet>164</a>/// ```
-<a href=#165 id=165 data-nosnippet>165</a></span><span class="attr">#[macro_export]
-<a href=#166 id=166 data-nosnippet>166</a></span><span class="macro">macro_rules!</span> euler_cs_step {
-<a href=#167 id=167 data-nosnippet>167</a>    (<span class="macro-nonterminal">$fixed_step</span>:expr) =&gt; {
-<a href=#168 id=168 data-nosnippet>168</a>        <span class="kw">fn </span>do_step(
-<a href=#169 id=169 data-nosnippet>169</a>            <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#170 id=170 data-nosnippet>170</a>            context: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>fmi_export::fmi3::Context&lt;<span class="self">Self</span>&gt;,
-<a href=#171 id=171 data-nosnippet>171</a>            current_communication_point: f64,
-<a href=#172 id=172 data-nosnippet>172</a>            communication_step_size: f64,
-<a href=#173 id=173 data-nosnippet>173</a>            _no_set_fmu_state_prior_to_current_point: bool,
-<a href=#174 id=174 data-nosnippet>174</a>        ) -&gt; <span class="prelude-ty">Result</span>&lt;fmi_export::fmi3::CSDoStepResult, fmi::fmi3::Fmi3Error&gt; {
-<a href=#175 id=175 data-nosnippet>175</a>            <span class="macro-nonterminal">$crate::euler_step</span>(
-<a href=#176 id=176 data-nosnippet>176</a>                <span class="self">self</span>,
-<a href=#177 id=177 data-nosnippet>177</a>                context,
-<a href=#178 id=178 data-nosnippet>178</a>                current_communication_point,
-<a href=#179 id=179 data-nosnippet>179</a>                communication_step_size,
-<a href=#180 id=180 data-nosnippet>180</a>                <span class="macro-nonterminal">$fixed_step</span>,
-<a href=#181 id=181 data-nosnippet>181</a>            )
-<a href=#182 id=182 data-nosnippet>182</a>        }
-<a href=#183 id=183 data-nosnippet>183</a>    };
-<a href=#184 id=184 data-nosnippet>184</a>}
-<a href=#185 id=185 data-nosnippet>185</a>
-<a href=#186 id=186 data-nosnippet>186</a><span class="doccomment">/// Generates a `do_step` method that uses symplectic (semi-implicit) Euler
-<a href=#187 id=187 data-nosnippet>187</a>/// integration with micro-stepping at the given fixed step size.
-<a href=#188 id=188 data-nosnippet>188</a>///
-<a href=#189 id=189 data-nosnippet>189</a>/// This is ideal for Hamiltonian systems (pendulums, springs, orbital mechanics)
-<a href=#190 id=190 data-nosnippet>190</a>/// where energy conservation is important.
-<a href=#191 id=191 data-nosnippet>191</a>///
-<a href=#192 id=192 data-nosnippet>192</a>/// States must be ordered as `[pos_0, vel_0, pos_1, vel_1, ...]`.
-<a href=#193 id=193 data-nosnippet>193</a>///
-<a href=#194 id=194 data-nosnippet>194</a>/// # Example
-<a href=#195 id=195 data-nosnippet>195</a>///
-<a href=#196 id=196 data-nosnippet>196</a>/// ```ignore
-<a href=#197 id=197 data-nosnippet>197</a>/// impl UserModel for SimplePendulum {
-<a href=#198 id=198 data-nosnippet>198</a>///     type LoggingCategory = DefaultLoggingCategory;
-<a href=#199 id=199 data-nosnippet>199</a>///     fn calculate_values(&amp;mut self, _ctx: &amp;dyn Context&lt;Self&gt;) -&gt; Result&lt;Fmi3Res, Fmi3Error&gt; {
-<a href=#200 id=200 data-nosnippet>200</a>///         self.der_theta = self.omega;
-<a href=#201 id=201 data-nosnippet>201</a>///         self.der_omega = -(self.g / self.L) * self.theta.sin();
-<a href=#202 id=202 data-nosnippet>202</a>///         Ok(Fmi3Res::OK)
-<a href=#203 id=203 data-nosnippet>203</a>///     }
-<a href=#204 id=204 data-nosnippet>204</a>///     adml_solver::symplectic_euler_cs_step!(0.001);
-<a href=#205 id=205 data-nosnippet>205</a>/// }
-<a href=#206 id=206 data-nosnippet>206</a>/// ```
-<a href=#207 id=207 data-nosnippet>207</a></span><span class="attr">#[macro_export]
-<a href=#208 id=208 data-nosnippet>208</a></span><span class="macro">macro_rules!</span> symplectic_euler_cs_step {
-<a href=#209 id=209 data-nosnippet>209</a>    (<span class="macro-nonterminal">$fixed_step</span>:expr) =&gt; {
-<a href=#210 id=210 data-nosnippet>210</a>        <span class="kw">fn </span>do_step(
-<a href=#211 id=211 data-nosnippet>211</a>            <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#212 id=212 data-nosnippet>212</a>            context: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>fmi_export::fmi3::Context&lt;<span class="self">Self</span>&gt;,
-<a href=#213 id=213 data-nosnippet>213</a>            current_communication_point: f64,
-<a href=#214 id=214 data-nosnippet>214</a>            communication_step_size: f64,
-<a href=#215 id=215 data-nosnippet>215</a>            _no_set_fmu_state_prior_to_current_point: bool,
-<a href=#216 id=216 data-nosnippet>216</a>        ) -&gt; <span class="prelude-ty">Result</span>&lt;fmi_export::fmi3::CSDoStepResult, fmi::fmi3::Fmi3Error&gt; {
-<a href=#217 id=217 data-nosnippet>217</a>            <span class="macro-nonterminal">$crate::symplectic_euler_step</span>(
-<a href=#218 id=218 data-nosnippet>218</a>                <span class="self">self</span>,
-<a href=#219 id=219 data-nosnippet>219</a>                context,
-<a href=#220 id=220 data-nosnippet>220</a>                current_communication_point,
-<a href=#221 id=221 data-nosnippet>221</a>                communication_step_size,
-<a href=#222 id=222 data-nosnippet>222</a>                <span class="macro-nonterminal">$fixed_step</span>,
-<a href=#223 id=223 data-nosnippet>223</a>            )
-<a href=#224 id=224 data-nosnippet>224</a>        }
-<a href=#225 id=225 data-nosnippet>225</a>    };
-<a href=#226 id=226 data-nosnippet>226</a>}
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fmi::EventFlags;
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fmi_export::fmi3::{CSDoStepResult, Context, Model, ModelGetSetStates, UserModel};
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a><span class="doccomment">/// Perform forward Euler integration with micro-stepping.
+<a href=#29 id=29 data-nosnippet>29</a>///
+<a href=#30 id=30 data-nosnippet>30</a>/// Integrates the model's continuous states from `current_communication_point`
+<a href=#31 id=31 data-nosnippet>31</a>/// to `current_communication_point + communication_step_size` using fixed-step
+<a href=#32 id=32 data-nosnippet>32</a>/// forward Euler with step size `fixed_step`.
+<a href=#33 id=33 data-nosnippet>33</a>///
+<a href=#34 id=34 data-nosnippet>34</a>/// The model's `calculate_values()` is called at each micro-step to update
+<a href=#35 id=35 data-nosnippet>35</a>/// derivatives before integration. This is the same function used by ME mode,
+<a href=#36 id=36 data-nosnippet>36</a>/// so equations are defined only once.
+<a href=#37 id=37 data-nosnippet>37</a>///
+<a href=#38 id=38 data-nosnippet>38</a>/// For models with `NUM_STATES == 0`, this simply advances time.
+<a href=#39 id=39 data-nosnippet>39</a></span><span class="kw">pub fn </span>euler_step&lt;M: UserModel + ModelGetSetStates&gt;(
+<a href=#40 id=40 data-nosnippet>40</a>    model: <span class="kw-2">&amp;mut </span>M,
+<a href=#41 id=41 data-nosnippet>41</a>    context: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Context&lt;M&gt;,
+<a href=#42 id=42 data-nosnippet>42</a>    current_communication_point: f64,
+<a href=#43 id=43 data-nosnippet>43</a>    communication_step_size: f64,
+<a href=#44 id=44 data-nosnippet>44</a>    fixed_step: f64,
+<a href=#45 id=45 data-nosnippet>45</a>) -&gt; <span class="prelude-ty">Result</span>&lt;CSDoStepResult, Fmi3Error&gt; {
+<a href=#46 id=46 data-nosnippet>46</a>    <span class="kw">let </span>t_end = current_communication_point + communication_step_size;
+<a href=#47 id=47 data-nosnippet>47</a>
+<a href=#48 id=48 data-nosnippet>48</a>    <span class="kw">if </span>M::NUM_STATES == <span class="number">0 </span>{
+<a href=#49 id=49 data-nosnippet>49</a>        context.set_time(t_end);
+<a href=#50 id=50 data-nosnippet>50</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(CSDoStepResult::completed(t_end));
+<a href=#51 id=51 data-nosnippet>51</a>    }
+<a href=#52 id=52 data-nosnippet>52</a>
+<a href=#53 id=53 data-nosnippet>53</a>    <span class="kw">let </span><span class="kw-2">mut </span>x = <span class="macro">vec!</span>[<span class="number">0.0</span>; M::NUM_STATES];
+<a href=#54 id=54 data-nosnippet>54</a>    <span class="kw">let </span><span class="kw-2">mut </span>dx = <span class="macro">vec!</span>[<span class="number">0.0</span>; M::NUM_STATES];
+<a href=#55 id=55 data-nosnippet>55</a>    <span class="kw">let </span><span class="kw-2">mut </span>t = current_communication_point;
+<a href=#56 id=56 data-nosnippet>56</a>
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">while </span>t_end - t &gt; f64::EPSILON * t_end.abs().max(<span class="number">1.0</span>) {
+<a href=#58 id=58 data-nosnippet>58</a>        <span class="kw">let </span>dt = (t_end - t).min(fixed_step);
+<a href=#59 id=59 data-nosnippet>59</a>
+<a href=#60 id=60 data-nosnippet>60</a>        <span class="comment">// Update derivatives at current state
+<a href=#61 id=61 data-nosnippet>61</a>        </span>model.calculate_values(context)<span class="question-mark">?</span>;
+<a href=#62 id=62 data-nosnippet>62</a>        model.get_continuous_states(<span class="kw-2">&amp;mut </span>x)<span class="question-mark">?</span>;
+<a href=#63 id=63 data-nosnippet>63</a>        model.get_continuous_state_derivatives(<span class="kw-2">&amp;mut </span>dx)<span class="question-mark">?</span>;
+<a href=#64 id=64 data-nosnippet>64</a>
+<a href=#65 id=65 data-nosnippet>65</a>        <span class="comment">// Forward Euler: x_{n+1} = x_n + dt * dx/dt
+<a href=#66 id=66 data-nosnippet>66</a>        </span><span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..M::NUM_STATES {
+<a href=#67 id=67 data-nosnippet>67</a>            x[i] += dx[i] * dt;
+<a href=#68 id=68 data-nosnippet>68</a>        }
+<a href=#69 id=69 data-nosnippet>69</a>
+<a href=#70 id=70 data-nosnippet>70</a>        model.set_continuous_states(<span class="kw-2">&amp;</span>x)<span class="question-mark">?</span>;
+<a href=#71 id=71 data-nosnippet>71</a>        t += dt;
+<a href=#72 id=72 data-nosnippet>72</a>        context.set_time(t);
+<a href=#73 id=73 data-nosnippet>73</a>    }
+<a href=#74 id=74 data-nosnippet>74</a>
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="prelude-val">Ok</span>(CSDoStepResult::completed(t_end))
+<a href=#76 id=76 data-nosnippet>76</a>}
+<a href=#77 id=77 data-nosnippet>77</a>
+<a href=#78 id=78 data-nosnippet>78</a><span class="doccomment">/// Perform symplectic (semi-implicit) Euler integration with micro-stepping.
+<a href=#79 id=79 data-nosnippet>79</a>///
+<a href=#80 id=80 data-nosnippet>80</a>/// This solver assumes the state vector is organized as pairs of
+<a href=#81 id=81 data-nosnippet>81</a>/// (position, velocity) variables, where odd-indexed derivatives depend on
+<a href=#82 id=82 data-nosnippet>82</a>/// even-indexed states (positions) and even-indexed derivatives are simply
+<a href=#83 id=83 data-nosnippet>83</a>/// the velocities (odd-indexed states).
+<a href=#84 id=84 data-nosnippet>84</a>///
+<a href=#85 id=85 data-nosnippet>85</a>/// The integration order is:
+<a href=#86 id=86 data-nosnippet>86</a>/// 1. Compute derivatives at current state via `calculate_values()`
+<a href=#87 id=87 data-nosnippet>87</a>/// 2. Update velocities (odd-indexed states) using current derivatives
+<a href=#88 id=88 data-nosnippet>88</a>/// 3. Update positions (even-indexed states) using the **new** velocities
+<a href=#89 id=89 data-nosnippet>89</a>///
+<a href=#90 id=90 data-nosnippet>90</a>/// This preserves energy for conservative systems, unlike forward Euler.
+<a href=#91 id=91 data-nosnippet>91</a>///
+<a href=#92 id=92 data-nosnippet>92</a>/// # State ordering convention
+<a href=#93 id=93 data-nosnippet>93</a>///
+<a href=#94 id=94 data-nosnippet>94</a>/// States must be ordered as: `[pos_0, vel_0, pos_1, vel_1, ...]`
+<a href=#95 id=95 data-nosnippet>95</a>/// where `der(pos_i) = vel_i` and `der(vel_i) = f(pos_i, vel_i, ...)`.
+<a href=#96 id=96 data-nosnippet>96</a></span><span class="kw">pub fn </span>symplectic_euler_step&lt;M: UserModel + ModelGetSetStates&gt;(
+<a href=#97 id=97 data-nosnippet>97</a>    model: <span class="kw-2">&amp;mut </span>M,
+<a href=#98 id=98 data-nosnippet>98</a>    context: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Context&lt;M&gt;,
+<a href=#99 id=99 data-nosnippet>99</a>    current_communication_point: f64,
+<a href=#100 id=100 data-nosnippet>100</a>    communication_step_size: f64,
+<a href=#101 id=101 data-nosnippet>101</a>    fixed_step: f64,
+<a href=#102 id=102 data-nosnippet>102</a>) -&gt; <span class="prelude-ty">Result</span>&lt;CSDoStepResult, Fmi3Error&gt; {
+<a href=#103 id=103 data-nosnippet>103</a>    <span class="kw">let </span>t_end = current_communication_point + communication_step_size;
+<a href=#104 id=104 data-nosnippet>104</a>
+<a href=#105 id=105 data-nosnippet>105</a>    <span class="kw">if </span>M::NUM_STATES == <span class="number">0 </span>{
+<a href=#106 id=106 data-nosnippet>106</a>        context.set_time(t_end);
+<a href=#107 id=107 data-nosnippet>107</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(CSDoStepResult::completed(t_end));
+<a href=#108 id=108 data-nosnippet>108</a>    }
+<a href=#109 id=109 data-nosnippet>109</a>
+<a href=#110 id=110 data-nosnippet>110</a>    <span class="macro">assert!</span>(
+<a href=#111 id=111 data-nosnippet>111</a>        M::NUM_STATES % <span class="number">2 </span>== <span class="number">0</span>,
+<a href=#112 id=112 data-nosnippet>112</a>        <span class="string">"symplectic Euler requires an even number of states (position/velocity pairs)"
+<a href=#113 id=113 data-nosnippet>113</a>    </span>);
+<a href=#114 id=114 data-nosnippet>114</a>
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">let </span><span class="kw-2">mut </span>x = <span class="macro">vec!</span>[<span class="number">0.0</span>; M::NUM_STATES];
+<a href=#116 id=116 data-nosnippet>116</a>    <span class="kw">let </span><span class="kw-2">mut </span>dx = <span class="macro">vec!</span>[<span class="number">0.0</span>; M::NUM_STATES];
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="kw">let </span><span class="kw-2">mut </span>t = current_communication_point;
+<a href=#118 id=118 data-nosnippet>118</a>
+<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">while </span>t_end - t &gt; f64::EPSILON * t_end.abs().max(<span class="number">1.0</span>) {
+<a href=#120 id=120 data-nosnippet>120</a>        <span class="kw">let </span>dt = (t_end - t).min(fixed_step);
+<a href=#121 id=121 data-nosnippet>121</a>
+<a href=#122 id=122 data-nosnippet>122</a>        <span class="comment">// Update derivatives at current state
+<a href=#123 id=123 data-nosnippet>123</a>        </span>model.calculate_values(context)<span class="question-mark">?</span>;
+<a href=#124 id=124 data-nosnippet>124</a>        model.get_continuous_states(<span class="kw-2">&amp;mut </span>x)<span class="question-mark">?</span>;
+<a href=#125 id=125 data-nosnippet>125</a>        model.get_continuous_state_derivatives(<span class="kw-2">&amp;mut </span>dx)<span class="question-mark">?</span>;
+<a href=#126 id=126 data-nosnippet>126</a>
+<a href=#127 id=127 data-nosnippet>127</a>        <span class="comment">// Symplectic Euler: update velocities first, then positions
+<a href=#128 id=128 data-nosnippet>128</a>        </span><span class="kw">for </span>pair <span class="kw">in </span><span class="number">0</span>..(M::NUM_STATES / <span class="number">2</span>) {
+<a href=#129 id=129 data-nosnippet>129</a>            <span class="kw">let </span>pos_idx = pair * <span class="number">2</span>;
+<a href=#130 id=130 data-nosnippet>130</a>            <span class="kw">let </span>vel_idx = pair * <span class="number">2 </span>+ <span class="number">1</span>;
+<a href=#131 id=131 data-nosnippet>131</a>
+<a href=#132 id=132 data-nosnippet>132</a>            <span class="comment">// Step 1: Update velocity using current acceleration
+<a href=#133 id=133 data-nosnippet>133</a>            </span>x[vel_idx] += dx[vel_idx] * dt;
+<a href=#134 id=134 data-nosnippet>134</a>
+<a href=#135 id=135 data-nosnippet>135</a>            <span class="comment">// Step 2: Update position using NEW velocity
+<a href=#136 id=136 data-nosnippet>136</a>            </span>x[pos_idx] += x[vel_idx] * dt;
+<a href=#137 id=137 data-nosnippet>137</a>        }
+<a href=#138 id=138 data-nosnippet>138</a>
+<a href=#139 id=139 data-nosnippet>139</a>        model.set_continuous_states(<span class="kw-2">&amp;</span>x)<span class="question-mark">?</span>;
+<a href=#140 id=140 data-nosnippet>140</a>        t += dt;
+<a href=#141 id=141 data-nosnippet>141</a>        context.set_time(t);
+<a href=#142 id=142 data-nosnippet>142</a>    }
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a>    <span class="prelude-val">Ok</span>(CSDoStepResult::completed(t_end))
+<a href=#145 id=145 data-nosnippet>145</a>}
+<a href=#146 id=146 data-nosnippet>146</a>
+<a href=#147 id=147 data-nosnippet>147</a><span class="doccomment">/// Perform forward Euler integration with micro-stepping and zero-crossing
+<a href=#148 id=148 data-nosnippet>148</a>/// event detection.
+<a href=#149 id=149 data-nosnippet>149</a>///
+<a href=#150 id=150 data-nosnippet>150</a>/// Works like [`euler_step`], but additionally checks event indicators at each
+<a href=#151 id=151 data-nosnippet>151</a>/// micro-step for sign changes. When a zero-crossing is detected, the model's
+<a href=#152 id=152 data-nosnippet>152</a>/// [`UserModel::event_update()`] is called to handle the discrete state change.
+<a href=#153 id=153 data-nosnippet>153</a>///
+<a href=#154 id=154 data-nosnippet>154</a>/// When `M::MAX_EVENT_INDICATORS == 0`, this compiles down to the same code as
+<a href=#155 id=155 data-nosnippet>155</a>/// [`euler_step`] with no event-detection overhead.
+<a href=#156 id=156 data-nosnippet>156</a>///
+<a href=#157 id=157 data-nosnippet>157</a>/// The model must implement [`UserModel::get_event_indicators()`] and
+<a href=#158 id=158 data-nosnippet>158</a>/// [`UserModel::event_update()`] for event handling to work.
+<a href=#159 id=159 data-nosnippet>159</a></span><span class="kw">pub fn </span>euler_step_with_events&lt;M: UserModel + ModelGetSetStates + Model&gt;(
+<a href=#160 id=160 data-nosnippet>160</a>    model: <span class="kw-2">&amp;mut </span>M,
+<a href=#161 id=161 data-nosnippet>161</a>    context: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Context&lt;M&gt;,
+<a href=#162 id=162 data-nosnippet>162</a>    current_communication_point: f64,
+<a href=#163 id=163 data-nosnippet>163</a>    communication_step_size: f64,
+<a href=#164 id=164 data-nosnippet>164</a>    fixed_step: f64,
+<a href=#165 id=165 data-nosnippet>165</a>) -&gt; <span class="prelude-ty">Result</span>&lt;CSDoStepResult, Fmi3Error&gt; {
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="comment">// When there are no event indicators, delegate to plain euler_step
+<a href=#167 id=167 data-nosnippet>167</a>    </span><span class="kw">if </span>M::MAX_EVENT_INDICATORS == <span class="number">0 </span>{
+<a href=#168 id=168 data-nosnippet>168</a>        <span class="kw">return </span>euler_step(
+<a href=#169 id=169 data-nosnippet>169</a>            model,
+<a href=#170 id=170 data-nosnippet>170</a>            context,
+<a href=#171 id=171 data-nosnippet>171</a>            current_communication_point,
+<a href=#172 id=172 data-nosnippet>172</a>            communication_step_size,
+<a href=#173 id=173 data-nosnippet>173</a>            fixed_step,
+<a href=#174 id=174 data-nosnippet>174</a>        );
+<a href=#175 id=175 data-nosnippet>175</a>    }
+<a href=#176 id=176 data-nosnippet>176</a>
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="kw">let </span>t_end = current_communication_point + communication_step_size;
+<a href=#178 id=178 data-nosnippet>178</a>
+<a href=#179 id=179 data-nosnippet>179</a>    <span class="kw">if </span>M::NUM_STATES == <span class="number">0 </span>{
+<a href=#180 id=180 data-nosnippet>180</a>        context.set_time(t_end);
+<a href=#181 id=181 data-nosnippet>181</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(CSDoStepResult::completed(t_end));
+<a href=#182 id=182 data-nosnippet>182</a>    }
+<a href=#183 id=183 data-nosnippet>183</a>
+<a href=#184 id=184 data-nosnippet>184</a>    <span class="kw">let </span><span class="kw-2">mut </span>x = <span class="macro">vec!</span>[<span class="number">0.0</span>; M::NUM_STATES];
+<a href=#185 id=185 data-nosnippet>185</a>    <span class="kw">let </span><span class="kw-2">mut </span>dx = <span class="macro">vec!</span>[<span class="number">0.0</span>; M::NUM_STATES];
+<a href=#186 id=186 data-nosnippet>186</a>    <span class="kw">let </span><span class="kw-2">mut </span>prev_z = <span class="macro">vec!</span>[<span class="number">0.0</span>; M::MAX_EVENT_INDICATORS];
+<a href=#187 id=187 data-nosnippet>187</a>    <span class="kw">let </span><span class="kw-2">mut </span>z = <span class="macro">vec!</span>[<span class="number">0.0</span>; M::MAX_EVENT_INDICATORS];
+<a href=#188 id=188 data-nosnippet>188</a>    <span class="kw">let </span><span class="kw-2">mut </span>event_flags = EventFlags::default();
+<a href=#189 id=189 data-nosnippet>189</a>    <span class="kw">let </span><span class="kw-2">mut </span>t = current_communication_point;
+<a href=#190 id=190 data-nosnippet>190</a>
+<a href=#191 id=191 data-nosnippet>191</a>    <span class="comment">// Evaluate initial event indicators
+<a href=#192 id=192 data-nosnippet>192</a>    </span>model.get_event_indicators(context, <span class="kw-2">&amp;mut </span>prev_z)<span class="question-mark">?</span>;
+<a href=#193 id=193 data-nosnippet>193</a>
+<a href=#194 id=194 data-nosnippet>194</a>    <span class="kw">while </span>t_end - t &gt; f64::EPSILON * t_end.abs().max(<span class="number">1.0</span>) {
+<a href=#195 id=195 data-nosnippet>195</a>        <span class="kw">let </span>dt = (t_end - t).min(fixed_step);
+<a href=#196 id=196 data-nosnippet>196</a>
+<a href=#197 id=197 data-nosnippet>197</a>        <span class="comment">// Forward Euler micro-step
+<a href=#198 id=198 data-nosnippet>198</a>        </span>model.calculate_values(context)<span class="question-mark">?</span>;
+<a href=#199 id=199 data-nosnippet>199</a>        model.get_continuous_states(<span class="kw-2">&amp;mut </span>x)<span class="question-mark">?</span>;
+<a href=#200 id=200 data-nosnippet>200</a>        model.get_continuous_state_derivatives(<span class="kw-2">&amp;mut </span>dx)<span class="question-mark">?</span>;
+<a href=#201 id=201 data-nosnippet>201</a>
+<a href=#202 id=202 data-nosnippet>202</a>        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..M::NUM_STATES {
+<a href=#203 id=203 data-nosnippet>203</a>            x[i] += dx[i] * dt;
+<a href=#204 id=204 data-nosnippet>204</a>        }
+<a href=#205 id=205 data-nosnippet>205</a>
+<a href=#206 id=206 data-nosnippet>206</a>        model.set_continuous_states(<span class="kw-2">&amp;</span>x)<span class="question-mark">?</span>;
+<a href=#207 id=207 data-nosnippet>207</a>        t += dt;
+<a href=#208 id=208 data-nosnippet>208</a>        context.set_time(t);
+<a href=#209 id=209 data-nosnippet>209</a>
+<a href=#210 id=210 data-nosnippet>210</a>        <span class="comment">// Check event indicators for sign changes
+<a href=#211 id=211 data-nosnippet>211</a>        </span>model.get_event_indicators(context, <span class="kw-2">&amp;mut </span>z)<span class="question-mark">?</span>;
+<a href=#212 id=212 data-nosnippet>212</a>
+<a href=#213 id=213 data-nosnippet>213</a>        <span class="kw">let </span>sign_change = prev_z.iter().zip(z.iter()).any(|(pz, cz)| <span class="kw-2">*</span>pz * <span class="kw-2">*</span>cz &lt; <span class="number">0.0</span>);
+<a href=#214 id=214 data-nosnippet>214</a>
+<a href=#215 id=215 data-nosnippet>215</a>        <span class="kw">if </span>sign_change {
+<a href=#216 id=216 data-nosnippet>216</a>            model.event_update(context, <span class="kw-2">&amp;mut </span>event_flags)<span class="question-mark">?</span>;
+<a href=#217 id=217 data-nosnippet>217</a>
+<a href=#218 id=218 data-nosnippet>218</a>            <span class="kw">if </span>event_flags.values_of_continuous_states_changed {
+<a href=#219 id=219 data-nosnippet>219</a>                <span class="comment">// Re-read states modified by event_update
+<a href=#220 id=220 data-nosnippet>220</a>                </span>model.get_continuous_states(<span class="kw-2">&amp;mut </span>x)<span class="question-mark">?</span>;
+<a href=#221 id=221 data-nosnippet>221</a>            }
+<a href=#222 id=222 data-nosnippet>222</a>
+<a href=#223 id=223 data-nosnippet>223</a>            <span class="kw">if </span>event_flags.terminate_simulation {
+<a href=#224 id=224 data-nosnippet>224</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(CSDoStepResult::completed(t));
+<a href=#225 id=225 data-nosnippet>225</a>            }
+<a href=#226 id=226 data-nosnippet>226</a>
+<a href=#227 id=227 data-nosnippet>227</a>            <span class="comment">// Re-evaluate indicators after event handling
+<a href=#228 id=228 data-nosnippet>228</a>            </span>model.get_event_indicators(context, <span class="kw-2">&amp;mut </span>z)<span class="question-mark">?</span>;
+<a href=#229 id=229 data-nosnippet>229</a>        }
+<a href=#230 id=230 data-nosnippet>230</a>
+<a href=#231 id=231 data-nosnippet>231</a>        prev_z.copy_from_slice(<span class="kw-2">&amp;</span>z);
+<a href=#232 id=232 data-nosnippet>232</a>    }
+<a href=#233 id=233 data-nosnippet>233</a>
+<a href=#234 id=234 data-nosnippet>234</a>    <span class="prelude-val">Ok</span>(CSDoStepResult::completed(t_end))
+<a href=#235 id=235 data-nosnippet>235</a>}
+<a href=#236 id=236 data-nosnippet>236</a>
+<a href=#237 id=237 data-nosnippet>237</a><span class="doccomment">/// Generates a `do_step` method that uses forward Euler integration
+<a href=#238 id=238 data-nosnippet>238</a>/// with micro-stepping at the given fixed step size.
+<a href=#239 id=239 data-nosnippet>239</a>///
+<a href=#240 id=240 data-nosnippet>240</a>/// Place this inside your `impl UserModel for MyModel` block.
+<a href=#241 id=241 data-nosnippet>241</a>/// The model must also implement `ModelGetSetStates` (auto-generated
+<a href=#242 id=242 data-nosnippet>242</a>/// by the `FmuModel` derive macro from `#[variable(derivative = x)]`).
+<a href=#243 id=243 data-nosnippet>243</a>///
+<a href=#244 id=244 data-nosnippet>244</a>/// # Example
+<a href=#245 id=245 data-nosnippet>245</a>///
+<a href=#246 id=246 data-nosnippet>246</a>/// ```ignore
+<a href=#247 id=247 data-nosnippet>247</a>/// impl UserModel for Dahlquist {
+<a href=#248 id=248 data-nosnippet>248</a>///     type LoggingCategory = DefaultLoggingCategory;
+<a href=#249 id=249 data-nosnippet>249</a>///     fn calculate_values(&amp;mut self, _ctx: &amp;dyn Context&lt;Self&gt;) -&gt; Result&lt;Fmi3Res, Fmi3Error&gt; {
+<a href=#250 id=250 data-nosnippet>250</a>///         self.der_x = -self.k * self.x;
+<a href=#251 id=251 data-nosnippet>251</a>///         Ok(Fmi3Res::OK)
+<a href=#252 id=252 data-nosnippet>252</a>///     }
+<a href=#253 id=253 data-nosnippet>253</a>///     adml_solver::euler_cs_step!(0.001);
+<a href=#254 id=254 data-nosnippet>254</a>/// }
+<a href=#255 id=255 data-nosnippet>255</a>/// ```
+<a href=#256 id=256 data-nosnippet>256</a></span><span class="attr">#[macro_export]
+<a href=#257 id=257 data-nosnippet>257</a></span><span class="macro">macro_rules!</span> euler_cs_step {
+<a href=#258 id=258 data-nosnippet>258</a>    (<span class="macro-nonterminal">$fixed_step</span>:expr) =&gt; {
+<a href=#259 id=259 data-nosnippet>259</a>        <span class="kw">fn </span>do_step(
+<a href=#260 id=260 data-nosnippet>260</a>            <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#261 id=261 data-nosnippet>261</a>            context: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>fmi_export::fmi3::Context&lt;<span class="self">Self</span>&gt;,
+<a href=#262 id=262 data-nosnippet>262</a>            current_communication_point: f64,
+<a href=#263 id=263 data-nosnippet>263</a>            communication_step_size: f64,
+<a href=#264 id=264 data-nosnippet>264</a>            _no_set_fmu_state_prior_to_current_point: bool,
+<a href=#265 id=265 data-nosnippet>265</a>        ) -&gt; <span class="prelude-ty">Result</span>&lt;fmi_export::fmi3::CSDoStepResult, fmi::fmi3::Fmi3Error&gt; {
+<a href=#266 id=266 data-nosnippet>266</a>            <span class="macro-nonterminal">$crate::euler_step</span>(
+<a href=#267 id=267 data-nosnippet>267</a>                <span class="self">self</span>,
+<a href=#268 id=268 data-nosnippet>268</a>                context,
+<a href=#269 id=269 data-nosnippet>269</a>                current_communication_point,
+<a href=#270 id=270 data-nosnippet>270</a>                communication_step_size,
+<a href=#271 id=271 data-nosnippet>271</a>                <span class="macro-nonterminal">$fixed_step</span>,
+<a href=#272 id=272 data-nosnippet>272</a>            )
+<a href=#273 id=273 data-nosnippet>273</a>        }
+<a href=#274 id=274 data-nosnippet>274</a>    };
+<a href=#275 id=275 data-nosnippet>275</a>}
+<a href=#276 id=276 data-nosnippet>276</a>
+<a href=#277 id=277 data-nosnippet>277</a><span class="doccomment">/// Generates a `do_step` method that uses symplectic (semi-implicit) Euler
+<a href=#278 id=278 data-nosnippet>278</a>/// integration with micro-stepping at the given fixed step size.
+<a href=#279 id=279 data-nosnippet>279</a>///
+<a href=#280 id=280 data-nosnippet>280</a>/// This is ideal for Hamiltonian systems (pendulums, springs, orbital mechanics)
+<a href=#281 id=281 data-nosnippet>281</a>/// where energy conservation is important.
+<a href=#282 id=282 data-nosnippet>282</a>///
+<a href=#283 id=283 data-nosnippet>283</a>/// States must be ordered as `[pos_0, vel_0, pos_1, vel_1, ...]`.
+<a href=#284 id=284 data-nosnippet>284</a>///
+<a href=#285 id=285 data-nosnippet>285</a>/// # Example
+<a href=#286 id=286 data-nosnippet>286</a>///
+<a href=#287 id=287 data-nosnippet>287</a>/// ```ignore
+<a href=#288 id=288 data-nosnippet>288</a>/// impl UserModel for SimplePendulum {
+<a href=#289 id=289 data-nosnippet>289</a>///     type LoggingCategory = DefaultLoggingCategory;
+<a href=#290 id=290 data-nosnippet>290</a>///     fn calculate_values(&amp;mut self, _ctx: &amp;dyn Context&lt;Self&gt;) -&gt; Result&lt;Fmi3Res, Fmi3Error&gt; {
+<a href=#291 id=291 data-nosnippet>291</a>///         self.der_theta = self.omega;
+<a href=#292 id=292 data-nosnippet>292</a>///         self.der_omega = -(self.g / self.L) * self.theta.sin();
+<a href=#293 id=293 data-nosnippet>293</a>///         Ok(Fmi3Res::OK)
+<a href=#294 id=294 data-nosnippet>294</a>///     }
+<a href=#295 id=295 data-nosnippet>295</a>///     adml_solver::symplectic_euler_cs_step!(0.001);
+<a href=#296 id=296 data-nosnippet>296</a>/// }
+<a href=#297 id=297 data-nosnippet>297</a>/// ```
+<a href=#298 id=298 data-nosnippet>298</a></span><span class="attr">#[macro_export]
+<a href=#299 id=299 data-nosnippet>299</a></span><span class="macro">macro_rules!</span> symplectic_euler_cs_step {
+<a href=#300 id=300 data-nosnippet>300</a>    (<span class="macro-nonterminal">$fixed_step</span>:expr) =&gt; {
+<a href=#301 id=301 data-nosnippet>301</a>        <span class="kw">fn </span>do_step(
+<a href=#302 id=302 data-nosnippet>302</a>            <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#303 id=303 data-nosnippet>303</a>            context: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>fmi_export::fmi3::Context&lt;<span class="self">Self</span>&gt;,
+<a href=#304 id=304 data-nosnippet>304</a>            current_communication_point: f64,
+<a href=#305 id=305 data-nosnippet>305</a>            communication_step_size: f64,
+<a href=#306 id=306 data-nosnippet>306</a>            _no_set_fmu_state_prior_to_current_point: bool,
+<a href=#307 id=307 data-nosnippet>307</a>        ) -&gt; <span class="prelude-ty">Result</span>&lt;fmi_export::fmi3::CSDoStepResult, fmi::fmi3::Fmi3Error&gt; {
+<a href=#308 id=308 data-nosnippet>308</a>            <span class="macro-nonterminal">$crate::symplectic_euler_step</span>(
+<a href=#309 id=309 data-nosnippet>309</a>                <span class="self">self</span>,
+<a href=#310 id=310 data-nosnippet>310</a>                context,
+<a href=#311 id=311 data-nosnippet>311</a>                current_communication_point,
+<a href=#312 id=312 data-nosnippet>312</a>                communication_step_size,
+<a href=#313 id=313 data-nosnippet>313</a>                <span class="macro-nonterminal">$fixed_step</span>,
+<a href=#314 id=314 data-nosnippet>314</a>            )
+<a href=#315 id=315 data-nosnippet>315</a>        }
+<a href=#316 id=316 data-nosnippet>316</a>    };
+<a href=#317 id=317 data-nosnippet>317</a>}
+<a href=#318 id=318 data-nosnippet>318</a>
+<a href=#319 id=319 data-nosnippet>319</a><span class="doccomment">/// Generates a `do_step` method that uses forward Euler integration
+<a href=#320 id=320 data-nosnippet>320</a>/// with zero-crossing event detection and micro-stepping.
+<a href=#321 id=321 data-nosnippet>321</a>///
+<a href=#322 id=322 data-nosnippet>322</a>/// Place this inside your `impl UserModel for MyModel` block.
+<a href=#323 id=323 data-nosnippet>323</a>/// The model must implement `ModelGetSetStates`, `Model`, and provide
+<a href=#324 id=324 data-nosnippet>324</a>/// `get_event_indicators()` and `event_update()` implementations.
+<a href=#325 id=325 data-nosnippet>325</a>///
+<a href=#326 id=326 data-nosnippet>326</a>/// # Example
+<a href=#327 id=327 data-nosnippet>327</a>///
+<a href=#328 id=328 data-nosnippet>328</a>/// ```ignore
+<a href=#329 id=329 data-nosnippet>329</a>/// impl UserModel for BouncingBall {
+<a href=#330 id=330 data-nosnippet>330</a>///     type LoggingCategory = DefaultLoggingCategory;
+<a href=#331 id=331 data-nosnippet>331</a>///     fn calculate_values(&amp;mut self, _ctx: &amp;dyn Context&lt;Self&gt;) -&gt; Result&lt;Fmi3Res, Fmi3Error&gt; {
+<a href=#332 id=332 data-nosnippet>332</a>///         self.der_h = self.v;
+<a href=#333 id=333 data-nosnippet>333</a>///         self.der_v = self.g;
+<a href=#334 id=334 data-nosnippet>334</a>///         Ok(Fmi3Res::OK)
+<a href=#335 id=335 data-nosnippet>335</a>///     }
+<a href=#336 id=336 data-nosnippet>336</a>///     // ... get_event_indicators() and event_update() implementations ...
+<a href=#337 id=337 data-nosnippet>337</a>///     adml_solver::euler_cs_step_with_events!(0.001);
+<a href=#338 id=338 data-nosnippet>338</a>/// }
+<a href=#339 id=339 data-nosnippet>339</a>/// ```
+<a href=#340 id=340 data-nosnippet>340</a></span><span class="attr">#[macro_export]
+<a href=#341 id=341 data-nosnippet>341</a></span><span class="macro">macro_rules!</span> euler_cs_step_with_events {
+<a href=#342 id=342 data-nosnippet>342</a>    (<span class="macro-nonterminal">$fixed_step</span>:expr) =&gt; {
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="kw">fn </span>do_step(
+<a href=#344 id=344 data-nosnippet>344</a>            <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#345 id=345 data-nosnippet>345</a>            context: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>fmi_export::fmi3::Context&lt;<span class="self">Self</span>&gt;,
+<a href=#346 id=346 data-nosnippet>346</a>            current_communication_point: f64,
+<a href=#347 id=347 data-nosnippet>347</a>            communication_step_size: f64,
+<a href=#348 id=348 data-nosnippet>348</a>            _no_set_fmu_state_prior_to_current_point: bool,
+<a href=#349 id=349 data-nosnippet>349</a>        ) -&gt; <span class="prelude-ty">Result</span>&lt;fmi_export::fmi3::CSDoStepResult, fmi::fmi3::Fmi3Error&gt; {
+<a href=#350 id=350 data-nosnippet>350</a>            <span class="macro-nonterminal">$crate::euler_step_with_events</span>(
+<a href=#351 id=351 data-nosnippet>351</a>                <span class="self">self</span>,
+<a href=#352 id=352 data-nosnippet>352</a>                context,
+<a href=#353 id=353 data-nosnippet>353</a>                current_communication_point,
+<a href=#354 id=354 data-nosnippet>354</a>                communication_step_size,
+<a href=#355 id=355 data-nosnippet>355</a>                <span class="macro-nonterminal">$fixed_step</span>,
+<a href=#356 id=356 data-nosnippet>356</a>            )
+<a href=#357 id=357 data-nosnippet>357</a>        }
+<a href=#358 id=358 data-nosnippet>358</a>    };
+<a href=#359 id=359 data-nosnippet>359</a>}
 </code></pre></div></section></main></body></html>
