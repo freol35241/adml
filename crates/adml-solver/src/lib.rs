@@ -22,7 +22,8 @@
 //! ```
 
 use fmi::fmi3::Fmi3Error;
-use fmi_export::fmi3::{CSDoStepResult, Context, ModelGetSetStates, UserModel};
+use fmi::EventFlags;
+use fmi_export::fmi3::{CSDoStepResult, Context, Model, ModelGetSetStates, UserModel};
 
 /// Perform forward Euler integration with micro-stepping.
 ///
@@ -143,6 +144,96 @@ pub fn symplectic_euler_step<M: UserModel + ModelGetSetStates>(
     Ok(CSDoStepResult::completed(t_end))
 }
 
+/// Perform forward Euler integration with micro-stepping and zero-crossing
+/// event detection.
+///
+/// Works like [`euler_step`], but additionally checks event indicators at each
+/// micro-step for sign changes. When a zero-crossing is detected, the model's
+/// [`UserModel::event_update()`] is called to handle the discrete state change.
+///
+/// When `M::MAX_EVENT_INDICATORS == 0`, this compiles down to the same code as
+/// [`euler_step`] with no event-detection overhead.
+///
+/// The model must implement [`UserModel::get_event_indicators()`] and
+/// [`UserModel::event_update()`] for event handling to work.
+pub fn euler_step_with_events<M: UserModel + ModelGetSetStates + Model>(
+    model: &mut M,
+    context: &mut dyn Context<M>,
+    current_communication_point: f64,
+    communication_step_size: f64,
+    fixed_step: f64,
+) -> Result<CSDoStepResult, Fmi3Error> {
+    // When there are no event indicators, delegate to plain euler_step
+    if M::MAX_EVENT_INDICATORS == 0 {
+        return euler_step(
+            model,
+            context,
+            current_communication_point,
+            communication_step_size,
+            fixed_step,
+        );
+    }
+
+    let t_end = current_communication_point + communication_step_size;
+
+    if M::NUM_STATES == 0 {
+        context.set_time(t_end);
+        return Ok(CSDoStepResult::completed(t_end));
+    }
+
+    let mut x = vec![0.0; M::NUM_STATES];
+    let mut dx = vec![0.0; M::NUM_STATES];
+    let mut prev_z = vec![0.0; M::MAX_EVENT_INDICATORS];
+    let mut z = vec![0.0; M::MAX_EVENT_INDICATORS];
+    let mut event_flags = EventFlags::default();
+    let mut t = current_communication_point;
+
+    // Evaluate initial event indicators
+    model.get_event_indicators(context, &mut prev_z)?;
+
+    while t_end - t > f64::EPSILON * t_end.abs().max(1.0) {
+        let dt = (t_end - t).min(fixed_step);
+
+        // Forward Euler micro-step
+        model.calculate_values(context)?;
+        model.get_continuous_states(&mut x)?;
+        model.get_continuous_state_derivatives(&mut dx)?;
+
+        for i in 0..M::NUM_STATES {
+            x[i] += dx[i] * dt;
+        }
+
+        model.set_continuous_states(&x)?;
+        t += dt;
+        context.set_time(t);
+
+        // Check event indicators for sign changes
+        model.get_event_indicators(context, &mut z)?;
+
+        let sign_change = prev_z.iter().zip(z.iter()).any(|(pz, cz)| *pz * *cz < 0.0);
+
+        if sign_change {
+            model.event_update(context, &mut event_flags)?;
+
+            if event_flags.values_of_continuous_states_changed {
+                // Re-read states modified by event_update
+                model.get_continuous_states(&mut x)?;
+            }
+
+            if event_flags.terminate_simulation {
+                return Ok(CSDoStepResult::completed(t));
+            }
+
+            // Re-evaluate indicators after event handling
+            model.get_event_indicators(context, &mut z)?;
+        }
+
+        prev_z.copy_from_slice(&z);
+    }
+
+    Ok(CSDoStepResult::completed(t_end))
+}
+
 /// Generates a `do_step` method that uses forward Euler integration
 /// with micro-stepping at the given fixed step size.
 ///
@@ -215,6 +306,48 @@ macro_rules! symplectic_euler_cs_step {
             _no_set_fmu_state_prior_to_current_point: bool,
         ) -> Result<fmi_export::fmi3::CSDoStepResult, fmi::fmi3::Fmi3Error> {
             $crate::symplectic_euler_step(
+                self,
+                context,
+                current_communication_point,
+                communication_step_size,
+                $fixed_step,
+            )
+        }
+    };
+}
+
+/// Generates a `do_step` method that uses forward Euler integration
+/// with zero-crossing event detection and micro-stepping.
+///
+/// Place this inside your `impl UserModel for MyModel` block.
+/// The model must implement `ModelGetSetStates`, `Model`, and provide
+/// `get_event_indicators()` and `event_update()` implementations.
+///
+/// # Example
+///
+/// ```ignore
+/// impl UserModel for BouncingBall {
+///     type LoggingCategory = DefaultLoggingCategory;
+///     fn calculate_values(&mut self, _ctx: &dyn Context<Self>) -> Result<Fmi3Res, Fmi3Error> {
+///         self.der_h = self.v;
+///         self.der_v = self.g;
+///         Ok(Fmi3Res::OK)
+///     }
+///     // ... get_event_indicators() and event_update() implementations ...
+///     adml_solver::euler_cs_step_with_events!(0.001);
+/// }
+/// ```
+#[macro_export]
+macro_rules! euler_cs_step_with_events {
+    ($fixed_step:expr) => {
+        fn do_step(
+            &mut self,
+            context: &mut dyn fmi_export::fmi3::Context<Self>,
+            current_communication_point: f64,
+            communication_step_size: f64,
+            _no_set_fmu_state_prior_to_current_point: bool,
+        ) -> Result<fmi_export::fmi3::CSDoStepResult, fmi::fmi3::Fmi3Error> {
+            $crate::euler_step_with_events(
                 self,
                 context,
                 current_communication_point,

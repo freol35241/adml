@@ -17,6 +17,26 @@ cargo fmt --all -- --check                          # Format check
 cargo clippy --workspace --all-targets              # Lint check
 ```
 
+## Prerequisites
+
+The `fmi-sys` crate uses `bindgen` to generate Rust bindings from FMI C headers at build time. This requires `libclang` to be installed on the system.
+
+**Devcontainer (recommended):** The `.devcontainer/devcontainer.json` installs `libclang-dev` automatically via `postCreateCommand`. No manual setup needed.
+
+**Manual setup (outside devcontainer):**
+```bash
+# Debian/Ubuntu
+sudo apt-get install libclang-dev
+
+# macOS
+brew install llvm
+
+# Verify: this should compile without errors
+cargo check -p adml-solver
+```
+
+If you see `Unable to find libclang` or `A libclang function was called that is not supported`, install `libclang-dev` (not just `libclang-cpp`).
+
 ## Adding a New Model
 
 ### 1. Create Directory Structure
@@ -77,7 +97,8 @@ fmi_export::export_fmu!(ModelName);
 **Solver choices:**
 - `adml_solver::euler_cs_step!(step)` - Forward Euler (most models)
 - `adml_solver::symplectic_euler_cs_step!(step)` - Symplectic Euler (Hamiltonian systems like pendulums)
-- Custom `do_step` - For models with events (e.g., bouncing ball)
+- `adml_solver::euler_cs_step_with_events!(step)` - Forward Euler with zero-crossing event detection
+- Custom `do_step` - For models that need something beyond the above
 
 ### 4. Cargo.toml Template
 ```toml
@@ -138,10 +159,47 @@ cargo fmi --package adml-{model-name}
 - Include convergence tests (solution improves with smaller steps)
 - Provide a `pub fn do_step(&mut self, current_time: f64, time_step: f64)` inherent method for testing without FMI context
 
+### Models with Events (Hybrid Systems)
+
+For models with discrete state changes triggered by continuous conditions (collisions, saturation, mode switches):
+
+1. **Add an event indicator field** to the struct:
+   ```rust
+   #[variable(event_indicator = true, skip)]
+   #[allow(dead_code)]
+   event_indicator_name: f64,
+   ```
+   This sets `MAX_EVENT_INDICATORS` in the generated `Model` impl. The field itself is not read directly — it exists for the derive macro.
+
+2. **Implement `get_event_indicators()`** — compute a zero-crossing function (positive on one side, negative on the other). Add hysteresis near zero to prevent retriggering:
+   ```rust
+   fn get_event_indicators(&mut self, _context: &dyn Context<Self>, indicators: &mut [f64]) -> Result<bool, Fmi3Error> {
+       indicators[0] = self.h; // positive above ground, negative below
+       Ok(true)
+   }
+   ```
+
+3. **Implement `event_update()`** — handle the discrete state change:
+   ```rust
+   fn event_update(&mut self, _context: &dyn Context<Self>, event_flags: &mut EventFlags) -> Result<Fmi3Res, Fmi3Error> {
+       event_flags.reset();
+       if /* event condition */ {
+           // Apply state change
+           event_flags.values_of_continuous_states_changed = true;
+       }
+       Ok(Fmi3Res::OK)
+   }
+   ```
+
+4. **Use the event-aware solver macro:** `adml_solver::euler_cs_step_with_events!(0.001);`
+
+See `models/mechanical/bouncing-ball/` for a complete example.
+
 ## Common Errors
 
 | Error | Cause | Solution |
 |-------|-------|----------|
+| `Unable to find libclang` | Missing system dependency | `sudo apt-get install libclang-dev` (see Prerequisites) |
 | `cannot find FmuModel` | Missing import | Add `use fmi_export::FmuModel;` |
 | `coverage_nightly` warnings | Upstream macro | Harmless, from `export_fmu!` macro |
 | `non_snake_case` warnings | Physics naming | Add `#![allow(non_snake_case)]` at crate level |

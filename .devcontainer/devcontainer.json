@@ -1,0 +1,13 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/rust
+{
+	"name": "Rust",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/rust:2-1-trixie",
+	"features": {
+		"ghcr.io/devcontainers-extra/features/claude-code:1": {}
+	},
+
+	// Install libclang-dev: required by the fmi-sys crate (bindgen) to generate FMI C bindings.
+	"postCreateCommand": "sudo apt-get update && sudo apt-get install -y libclang-dev"
+}
