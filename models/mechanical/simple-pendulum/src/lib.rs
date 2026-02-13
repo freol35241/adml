@@ -79,15 +79,15 @@ pub struct SimplePendulum {
 
     // === Derived Outputs (calculated after integration) ===
     /// Total mechanical energy [J]
-    #[variable(causality = Output, start = 0.0, initial = Calculated)]
+    #[variable(causality = Output, initial = Calculated)]
     pub energy: f64,
 
     /// Kinetic energy [J]
-    #[variable(causality = Output, start = 0.0, initial = Calculated)]
+    #[variable(causality = Output, initial = Calculated)]
     pub KE: f64,
 
     /// Potential energy [J], reference at lowest point
-    #[variable(causality = Output, start = 0.0, initial = Calculated)]
+    #[variable(causality = Output, initial = Calculated)]
     pub PE: f64,
 
     /// Derivative of theta

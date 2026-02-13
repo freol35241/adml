@@ -65,11 +65,11 @@ pub struct RcThermalSingleZone {
     pub T_indoor: f64,
 
     /// Heat flow through envelope [W] (positive = heat loss)
-    #[variable(causality = Output, start = 0.0, initial = Calculated)]
+    #[variable(causality = Output, initial = Calculated)]
     pub Q_envelope: f64,
 
     /// Net heat flow into zone [W]
-    #[variable(causality = Output, start = 0.0, initial = Calculated)]
+    #[variable(causality = Output, initial = Calculated)]
     pub Q_net: f64,
 
     /// Derivative of indoor temperature

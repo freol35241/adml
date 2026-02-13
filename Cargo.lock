@@ -441,9 +441,9 @@ dependencies = [
 
 [[package]]
 name = "fmi"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2e6bf39dedcfda6843049b18a8e0cdcbb6a30dc785027c61060f4601dc91507"
+checksum = "86c41a8885b1cea2cb97bb2b63ce575877f2b2c3851d6e7b71d603b57c7a8730"
 dependencies = [
  "built",
  "document-features",
@@ -460,9 +460,9 @@ dependencies = [
 
 [[package]]
 name = "fmi-export"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6aa827e540df48e6aa0dc719cd78affe0a2f978c96634b828c6f0efb73e8a30"
+checksum = "01af7b26a84cfafee3c2b15c777b204a722f4c59470fdf42faf8df92d1ff1aa9"
 dependencies = [
  "chrono",
  "document-features",
@@ -474,9 +474,9 @@ dependencies = [
 
 [[package]]
 name = "fmi-export-derive"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88e0db0636c9115a06aa06b756ffd7025d1b78156ec633856c6230d6d7729f05"
+checksum = "1d10386b862afa7130e91319daed68a65775c00b6ab9b16afa1d4ee765b1b93f"
 dependencies = [
  "attribute-derive",
  "chrono",
@@ -491,9 +491,9 @@ dependencies = [
 
 [[package]]
 name = "fmi-schema"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a332fb9c777fb96f49e32408c11a49eca71e1e19d821b09b21b547fc68c42015"
+checksum = "43ead17b6997a1934d92159150709e41ba3afebfd23964438c2953488d09d476"
 dependencies = [
  "chrono",
  "document-features",

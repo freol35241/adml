@@ -52,7 +52,7 @@ def load_plot_config(model_dir: Path) -> Optional[Dict[str, Any]]:
 
 def get_fmu_outputs(fmu_path: Path) -> List[str]:
     """Get list of output variable names from FMU model description."""
-    model_desc = read_model_description(str(fmu_path), validate=False)
+    model_desc = read_model_description(str(fmu_path), validate=True)
     outputs = []
     for var in model_desc.modelVariables:
         if var.causality == 'output':
@@ -80,7 +80,7 @@ def create_generic_plot(fmu_path: Path, model_name: str, output_dir: Path,
             stop_time=5.0,
             step_size=0.01,
             output_interval=0.01,
-            validate=False,
+            validate=True,
         )
 
         # Create single plot with all outputs
@@ -220,7 +220,7 @@ def create_configured_plot(fmu_path: Path, model_name: str, config: Dict[str, An
             stop_time=stop_time,
             step_size=step_size,
             output_interval=output_interval,
-            validate=False,
+            validate=True,
             start_values=start_values if start_values else None
         )
 
