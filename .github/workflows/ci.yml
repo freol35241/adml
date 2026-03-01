@@ -373,14 +373,14 @@ jobs:
           fetch-depth: 0
 
       - name: Download plot manifest
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: plot-manifest
           path: .
         continue-on-error: true
 
       - name: Download FMU figures
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: fmu-figures
           path: fmu-figures
