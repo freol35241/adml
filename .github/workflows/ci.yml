@@ -485,14 +485,14 @@ jobs:
 
       - name: Post/Update PR comment with embedded images
         if: steps.check-figures.outputs.has_figures == 'true'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: fmu-simulation-results
           message: ${{ steps.build-comment.outputs.body }}
 
       - name: Post PR comment (no figures)
         if: steps.check-figures.outputs.has_figures == 'false'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: fmu-simulation-results
           message: |
