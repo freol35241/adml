@@ -16,7 +16,7 @@ tomli>=2.0.0; python_version < '3.11'  # TOML parser (built-in as tomllib in Pyt
 
 # Testing
 pytest>=7.4.0
-pytest-xdist>=3.3.0  # Parallel test execution
+pytest-xdist>=3.8.0  # Parallel test execution
 
 # FMU compliance checking (if available via pip)
 # Note: FMU Checker is typically distributed as a standalone tool
