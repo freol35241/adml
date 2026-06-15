@@ -12,7 +12,7 @@ scipy>=1.11.0
 matplotlib>=3.7.0
 
 # Configuration parsing
-tomli>=2.0.0; python_version < '3.11'  # TOML parser (built-in as tomllib in Python 3.11+)
+tomli>=2.4.1; python_version < '3.11'  # TOML parser (built-in as tomllib in Python 3.11+)
 
 # Testing
 pytest>=7.4.0
