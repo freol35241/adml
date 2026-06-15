@@ -2,7 +2,7 @@
 # Install with: pip install -r testing/requirements.txt
 
 # FMU simulation and loading
-fmpy>=0.3.20
+fmpy>=0.3.21
 
 # Numerical computation
 numpy>=1.24.0
