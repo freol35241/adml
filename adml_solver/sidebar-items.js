@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["euler_step","euler_step_with_events","symplectic_euler_step"],"macro":["euler_cs_step","euler_cs_step_with_events","symplectic_euler_cs_step"]};
+window.SIDEBAR_ITEMS = {"fn":["euler_step","euler_step_with_events","symplectic_euler_step"],"macro":[["euler_cs_step",1],["euler_cs_step_with_events",1],["symplectic_euler_cs_step",1]]};
