@@ -15,7 +15,7 @@ matplotlib>=3.7.0
 tomli>=2.0.0; python_version < '3.11'  # TOML parser (built-in as tomllib in Python 3.11+)
 
 # Testing
-pytest>=7.4.0
+pytest>=9.1.1
 pytest-xdist>=3.3.0  # Parallel test execution
 
 # FMU compliance checking (if available via pip)
